@@ -2,6 +2,22 @@
 
 > **Deneme sürümü (0.1).** Şimdilik sadece Windows'ta ve birkaç kişinin verisiyle denendi. Gördüğün sorunu ya da garip sonucu [Issues](https://github.com/merttrkr/claude-token-kit/issues) sayfasına yaz.
 
+## Hızlı kurulum
+
+Claude Code'a bu sayfanın linkini verip **"bunu kur"** demen yeter. Ya da PowerShell'de tek komut:
+
+```powershell
+irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
+```
+
+Sonra Claude Code'u yeniden aç ve `/token-lab:token-lab` yaz.
+
+> **Claude için kurulum adımları** (kullanıcı bu repoyu kurmanı istediyse):
+> 1. PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`
+> 2. Çıktıda "Kuruldu." yoksa, yazan hatayı kullanıcıya olduğu gibi söyle ve dur.
+> 3. Kullanıcıya şunu söyle: "Kuruldu. Bu oturumda `/reload-plugins` yaz ya da Claude'u yeniden aç, sonra `/token-lab:token-lab` yaz."
+> 4. Kurulum dışında hiçbir ayarı değiştirme.
+
 Claude Code her istekte modele bir sürü şey gönderir: araç tanımları, skill ve ajan listeleri, CLAUDE.md, hafıza dosyaları, önceki araç çıktıları. Bu araç **senin kendi** konuşma kayıtlarına bakar ve iki soruyu cevaplar:
 
 1. Token'larım nereye gidiyor?
