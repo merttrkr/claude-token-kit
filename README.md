@@ -1,5 +1,7 @@
 # Token haritası (token-lab)
 
+> **Deneme sürümü (0.1).** Şimdilik sadece Windows'ta ve birkaç kişinin verisiyle denendi. Gördüğün sorunu ya da garip sonucu [Issues](https://github.com/merttrkr/claude-token-kit/issues) sayfasına yaz.
+
 Claude Code her istekte modele bir sürü şey gönderir: araç tanımları, skill ve ajan listeleri, CLAUDE.md, hafıza dosyaları, önceki araç çıktıları. Bu araç **senin kendi** konuşma kayıtlarına bakar ve iki soruyu cevaplar:
 
 1. Token'larım nereye gidiyor?
