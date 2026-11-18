@@ -2,7 +2,7 @@
 
 [English](README.md) · **Türkçe**
 
-> **Deneme sürümü (0.1).** Windows, macOS ve Linux'ta çalışır. Şimdilik Windows ve Linux'ta denendi (macOS'ta henüz değil), birkaç kişinin verisiyle. Gördüğün sorunu ya da garip sonucu [Issues](https://github.com/merttrkr/claude-token-kit/issues) sayfasına yaz.
+> **Deneme sürümü (0.2).** Windows, macOS ve Linux'ta çalışır. Şimdilik Windows ve Linux'ta denendi (macOS'ta henüz değil), birkaç kişinin verisiyle. Gördüğün sorunu ya da garip sonucu [Issues](https://github.com/merttrkr/claude-token-kit/issues) sayfasına yaz.
 
 Claude Code her istekte modele bir sürü şey gönderir: araç tanımları, skill ve ajan listeleri, CLAUDE.md, hafıza dosyaları, önceki araç çıktıları. Bu araç **senin kendi** konuşma kayıtlarına bakar ve iki soruyu cevaplar:
 
@@ -20,7 +20,7 @@ Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü ya
 
 ## Güvenlik
 
-- **Salt okunur.** Hiçbir ayarı ya da dosyayı değiştirmez. Okuduğu yerler:
+- **Rapor salt okunur.** Hiçbir ayarı ya da dosyayı değiştirmez. `/token-lab:optimize` bir dosyayı ancak farkı görüp onay verdikten sonra değiştirir. Raporun okuduğu yerler:
   - `~/.claude/projects` altındaki kayıtlar
   - `~/.claude/agents` ve `~/.claude/skills`
   - kayıtlarda adı geçen hafıza index'leri (`MEMORY.md`)
@@ -82,6 +82,14 @@ uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 - **5. bölüm:** ajan işleri. Hangi tekrar eden iş isimli bir ajana taşınabilir, hangi ajan kullanılmıyor.
 
 Rapor ne kadar geriye bakabilir? Claude Code eski kayıtları `cleanupPeriodDays` ayarına göre siler (varsayılan 30 gün). Bu ayar senin.
+
+## Genel optimizasyon: `/token-lab:optimize`
+
+Rapor ölçer; bu mod okur. Claude bağlamına giren her parçayı (CLAUDE.md'ler, kurallar, hafıza, skill'ler, ajanlar) en pahalıdan başlayarak placement standardına göre okur ve her satır için öneri verir: sil, kısalt, taşı (nereye) ya da birleştir. Eklenebilecekleri de önerir: tekrar eden bir araç hatası için hook, her oturumda okuduğun bir dosya için hafıza satırı, tekrar tekrar yaptığın bir düzeltme için kural.
+
+- Önce bir betik kesin olarak kontrol edilebilenleri listeler: artık olmayan yollar, system prompt'un zaten söylediği cümleler, aynı satırları paylaşan dosyalar.
+- Token harcar: Claude tahmini söyler ve kaç parça okunacağını sorar.
+- Değişiklikler tek tek uygulanır; her birinde fark gösterilir, yedek alınır, onayın istenir.
 
 ## Kendi kuralların
 

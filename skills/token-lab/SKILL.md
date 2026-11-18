@@ -53,8 +53,8 @@ Bir dosyayı ya da ayarı değiştirmeden önce ilgili standardı oku ve ona gö
 Değiştirirken:
 
 - Önce dokunacağın dosyayı ve tam farkı (diff) göster, onay al.
-- Değiştirmeden önce dosyanın yedeğini aynı klasöre `.bak-token-lab-<tarih>` uzantısıyla al. Yedek, `settings.json`'daki `env` gibi gizli değerleri de taşır: içeriğini ekrana basma, kullanıcıya yalnızca yolunu söyle.
-- `settings.json` gibi JSON dosyalarında yalnızca ilgili anahtarı ekle; dosyanın geri kalanına dokunma, `env` değerlerini ekrana basma.
+- Değiştirmeden önce dosyanın yedeğini aynı klasöre `.bak-token-lab-<YYYYMMDD-HHMMSS>` uzantısıyla al; aynı adda yedek varsa üzerine yazma. Yedek, `settings.json`'daki `env` gibi gizli değerleri de taşır: içeriğini ekrana basma, kullanıcıya yalnızca yolunu söyle.
+- `settings.json` gibi JSON dosyalarında yalnızca ilgili anahtarı ekle; dosyanın geri kalanına dokunma. Farkta sadece değişen anahtarın satırlarını göster, `env` değerlerini `***` ile maskele.
 - Plugin skill'lerini gizlemek için `skillOverrides` işlemez; o skill'in `SKILL.md` frontmatter'ına `disable-model-invocation: true` eklenir ve plugin güncellenince yeniden gerekir. Bunu kullanıcıya söyle.
 - Hiçbir maddeyi kendiliğinden uygulama; her biri ayrı onay ister.
 
@@ -63,6 +63,8 @@ Değiştirirken:
 Raporun 4. bölümündeki dosyaları kullanıcı isterse oku. Her satırı `references/placement.md`'deki altı soruyla değerlendir; global `~/.claude/CLAUDE.md` için altı koşulu da uygula. Her öneriyi satır numarası ve eylemle ver (sil, kısalt, taşı: nereye).
 
 Bu kısım model yargısıdır; kullanıcıya öyle söyle. Silme ya da taşıma önerilerini 3. adımdaki gibi onayla uygula.
+
+Kullanıcı bütün parçaların (CLAUDE.md, kurallar, hafıza, skill'ler, ajanlar) satır satır incelenmesini, eksiklerin (hook, hafıza, kural) de önerilmesini isterse: "Bunun için `/token-lab:optimize` yaz; token harcar, kapsamı birlikte belirleriz." de.
 
 ## 5. Bitiş
 

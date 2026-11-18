@@ -9,6 +9,7 @@ from tokenlab import (
     agents,
     budget,
     episodes,
+    inventory,
     ledger,
     otel_sink,
     probe,
@@ -90,6 +91,30 @@ def main(argv: list[str] | None = None) -> int:
     )
     p_why.add_argument(
         "--skills-dir", type=Path, default=Path.home() / ".claude" / "skills"
+    )
+
+    p_inv = sub.add_parser(
+        "inventory",
+        help="what /token-lab:optimize reads: pieces, sure checks, what to add",
+    )
+    p_inv.add_argument("--root", type=Path, default=PROJECTS)
+    p_inv.add_argument("--db", type=Path, default=None)
+    p_inv.add_argument("--days", type=int, default=30)
+    p_inv.add_argument("--rules", type=Path, default=None)
+    p_inv.add_argument(
+        "--agents-dir", type=Path, default=Path.home() / ".claude" / "agents"
+    )
+    p_inv.add_argument(
+        "--skills-dir", type=Path, default=Path.home() / ".claude" / "skills"
+    )
+    p_inv.add_argument(
+        "--plugins-dir", type=Path, default=Path.home() / ".claude" / "plugins"
+    )
+    p_inv.add_argument(
+        "--out",
+        type=Path,
+        default=None,
+        help="folder for the two files (default: new temp folder)",
     )
 
     p_eps = sub.add_parser(
@@ -183,6 +208,36 @@ def main(argv: list[str] | None = None) -> int:
                 sys.stdout.write(full_report(conn))
             finally:
                 conn.close()
+        return 0
+    if args.command == "inventory":
+        if not args.root.is_dir():
+            print(f"Transcript klasörü yok: {args.root}. Claude Code'u bir kez kullan.")
+            return 1
+        out = args.out or Path(tempfile.mkdtemp(prefix="token-lab-"))
+        out.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            db = args.db or Path(tmp) / "ledger.sqlite"
+            if args.db is None or not args.db.exists():
+                ingest(args.root, db)
+            conn = ledger.open_ledger(db)
+            try:
+                text, pieces = inventory.render(
+                    conn,
+                    args.root,
+                    args.agents_dir,
+                    args.skills_dir,
+                    args.plugins_dir,
+                    args.days,
+                    rules.load(args.rules),
+                )
+            finally:
+                conn.close()
+        (out / "inventory.md").write_text(text, encoding="utf-8")
+        (out / "pieces.md").write_text(pieces, encoding="utf-8")
+        (out / "system-prompt.md").write_text(
+            inventory.system_prompt(args.root), encoding="utf-8"
+        )
+        print(out)
         return 0
     if args.command == "ingest":
         root = args.root or default_root()

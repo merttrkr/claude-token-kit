@@ -2,7 +2,7 @@
 
 **English** · [Türkçe](README.tr.md)
 
-> **Trial version (0.1).** Works on Windows, macOS and Linux. Tested on Windows and Linux so far (not yet on macOS), with data from a few people. If you see a problem or an odd result, post it on the [Issues](https://github.com/merttrkr/claude-token-kit/issues) page.
+> **Trial version (0.2).** Works on Windows, macOS and Linux. Tested on Windows and Linux so far (not yet on macOS), with data from a few people. If you see a problem or an odd result, post it on the [Issues](https://github.com/merttrkr/claude-token-kit/issues) page.
 
 Claude Code sends the model a lot with every request: tool definitions, skill and agent lists, CLAUDE.md, memory files, earlier tool output. This tool looks at **your own** conversation logs and answers two questions:
 
@@ -20,7 +20,7 @@ Each finding shows what it cost, the evidence, and a one-sentence fix.
 
 ## Safety
 
-- **Read-only.** It changes no setting and no file. It reads:
+- **The report is read-only.** It changes no setting and no file. `/token-lab:optimize` changes a file only after you see the diff and say yes. The report reads:
   - the logs under `~/.claude/projects`
   - `~/.claude/agents` and `~/.claude/skills`
   - the memory indexes (`MEMORY.md`) named in the logs
@@ -84,6 +84,14 @@ The report text is in Turkish for now. `/token-lab:token-lab` has Claude summari
 - **Section 5:** agent work. Which repeated work could move to a named agent, which agent is unused.
 
 How far back can the report look? Claude Code deletes old logs based on the `cleanupPeriodDays` setting (default 30 days). That setting is yours.
+
+## Full optimization: `/token-lab:optimize`
+
+The report measures; this mode reads. Claude goes through every piece that enters your context (CLAUDE.md files, rules, memory, skills, agents), most expensive first, against the placement standard, and proposes for each line: delete, shorten, move (and where) or merge. It also proposes what to add: a hook for a tool error that keeps coming back, a memory line for a file you read in every session, a rule for a correction you keep making.
+
+- A script first lists what it can check for sure: paths that no longer exist, sentences the system prompt already says, files that share the same lines.
+- It spends tokens: Claude tells you the estimate and asks how many pieces to read.
+- Changes are applied one at a time, each with a diff, a backup and your yes.
 
 ## Your own rules
 

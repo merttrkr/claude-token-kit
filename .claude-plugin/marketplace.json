@@ -8,8 +8,8 @@
     {
       "name": "token-lab",
       "source": "./",
-      "description": "Finds where your tokens go and which ones should not be there. Read-only.",
-      "version": "0.1.2"
+      "description": "Finds where your tokens go and which should not be there; optimize applies changes only after your yes.",
+      "version": "0.2.0"
     }
   ]
 }
