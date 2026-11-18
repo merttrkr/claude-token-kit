@@ -164,7 +164,7 @@ def main(argv: list[str] | None = None) -> int:
 
         def full_report(conn: sqlite3.Connection) -> str:
             return (
-                why.render(conn, args.days, r)
+                why.render(conn, args.days, r, catalog)
                 + "\n## 5. Ajan işleri (ayrıntı, İngilizce)\n\n"
                 + agents.render(conn, catalog, refs, args.days, r).split("\n", 1)[1]
             )

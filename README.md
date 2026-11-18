@@ -75,7 +75,7 @@ The report text is in Turkish for now. `/token-lab:token-lab` has Claude summari
 
 - **Top:** two sentences with the main numbers, then a **Summary** table with one line per angle (tool output, cache, CLAUDE.md, memory, tools and MCP, skills, agents, hooks), largest share of cost first, and the **First step**.
 - **Section 1:** the part sent again on every request, and its share.
-- **Section 2:** what should not be there, sorted by weekly cost.
+- **Section 2:** what should not be there, sorted by weekly cost. It ends with an **agent candidates** table: recurring work (in general-purpose agents, or outside systems the main session reads itself) measured against the agent standard, with the estimated weekly saving.
   - Cost is "input-equivalent tokens". A token read from cache counts about 0.1, a token written to cache 1.25–2 (Claude Code's price ratios).
   - The effect on a subscription quota was not measured.
 - **"Already looks fixed":** items no longer seen in the last 2 days of sessions. Not suggested.

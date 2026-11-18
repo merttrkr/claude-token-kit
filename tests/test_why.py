@@ -6,7 +6,7 @@ from typing import Any
 import pytest
 from conftest import PROJECT, SONNET, assistant, write_jsonl
 
-from tokenlab import why
+from tokenlab import agents, why
 from tokenlab.ingest import ingest
 from tokenlab.ledger import create
 from tokenlab.rules import Rules
@@ -354,3 +354,191 @@ def test_agent_trend_shows_the_last_week_and_the_last_days(tmp_path: Path) -> No
     assert "son 7 gün %50, son 2 gün %0" in agents
     # The latest share is 0%: no advice to move work to a named agent.
     assert "isimli bir ajana" not in agents
+
+
+def three_days(
+    tmp_path: Path,
+    main_chars: int = 0,
+    gp_chars: int = 0,
+    per_turn: int = 1,
+    gp_tool: str = "Read",
+    catalog: dict[str, agents.AgentDef] | None = None,
+    main_tool: str = "mcp__tracker__get_issue",
+    rules: Rules = LOW,
+) -> str:
+    """Three sessions on three days. Each has two user messages; each message
+    reads the tracker per_turn times in main (main_chars per result) and runs a
+    general-purpose agent that Reads a spec (gp_chars). Returns the report."""
+    root = tmp_path / "corpus"
+    for d in (1, 2, 3):
+        sid = f"4444000{d}-0000-0000-0000-000000000000"
+        stamp = f"2026-10-0{d}T10:%02d:00.000Z"
+        records: list[dict[str, Any]] = []
+        for i in range(2):
+            calls = [use(f"t{d}{i}{k}", main_tool, key="X-1") for k in range(per_turn)]
+            if gp_chars:
+                calls.append(use(f"a{d}{i}", "Agent", subagent_type="general-purpose"))
+            records.append(
+                {
+                    "type": "user",
+                    "message": {"content": "look"},
+                    "timestamp": stamp % (i * 2),
+                }
+            )
+            records.append(
+                {
+                    **assistant(
+                        i, f"req_{d}{i}", SONNET, content=calls, input_tokens=10
+                    ),
+                    "timestamp": stamp % (i * 2),
+                }
+            )
+            if main_chars:
+                records += [
+                    {
+                        **result(f"t{d}{i}{k}", main_chars, 0),
+                        "timestamp": stamp % (i * 2 + 1),
+                    }
+                    for k in range(per_turn)
+                ]
+        records.append(
+            {
+                **assistant(2, f"req_{d}9", SONNET, content=[], input_tokens=10),
+                "timestamp": stamp % 9,
+            }
+        )
+        write_jsonl(root / PROJECT / f"{sid}.jsonl", records)
+        if not gp_chars:
+            continue
+        sub = root / PROJECT / sid / "subagents"
+        for i in range(2):
+            name = f"agent-g{d}{i}"
+            write_jsonl(
+                sub / f"{name}.jsonl",
+                [
+                    {
+                        **assistant(
+                            0,
+                            f"req_g{d}{i}0",
+                            SONNET,
+                            content=[
+                                use(f"r{d}{i}", gp_tool, file_path="/w/specs/a.md")
+                            ],
+                            input_tokens=10,
+                        ),
+                        "timestamp": stamp % 1,
+                    },
+                    {**result(f"r{d}{i}", gp_chars, 0), "timestamp": stamp % 2},
+                    {
+                        **assistant(
+                            1, f"req_g{d}{i}1", SONNET, content=[], input_tokens=10
+                        ),
+                        "timestamp": stamp % 3,
+                    },
+                ],
+            )
+            (sub / f"{name}.meta.json").write_text(
+                json.dumps({"agentType": "general-purpose", "toolUseId": f"a{d}{i}"})
+            )
+    db = tmp_path / "three.sqlite"
+    ingest(root, db)
+    return why.render(sqlite3.connect(db), 30, rules, catalog)
+
+
+def candidates_table(text: str) -> list[str]:
+    if "### Ajan adayları" not in text:
+        return []
+    part = text.split("### Ajan adayları", 1)[1].split("##", 1)[0]
+    return [r for r in part.splitlines() if r.startswith("| ") and "---" not in r][1:]
+
+
+def test_main_session_reads_that_pass_the_standard_are_an_agent_candidate(
+    tmp_path: Path,
+) -> None:
+    text = three_days(tmp_path, main_chars=6000)
+    found = [r for r in finding(text, "A") if "`tracker`" in r]
+    assert found and "6 kez" in found[0] and "ajan" in found[0]
+    # The same results are not counted again as big tool output.
+    assert not any("get_issue" in r for r in finding(text, "R"))
+    rows = [r for r in candidates_table(text) if "tracker" in r]
+    assert rows and "ana oturum" in rows[0] and "ajan adayı" in rows[0]
+
+
+def test_main_session_reads_smaller_than_a_summary_are_not(tmp_path: Path) -> None:
+    text = three_days(tmp_path, main_chars=500)
+    assert not any("`tracker`" in r for r in finding(text, "A"))
+    rows = [r for r in candidates_table(text) if "tracker" in r]
+    assert rows and "değmez" in rows[0]
+
+
+def test_a_recurring_general_purpose_job_is_measured_against_the_standard(
+    tmp_path: Path,
+) -> None:
+    rows = [
+        r
+        for r in candidates_table(three_days(tmp_path, gp_chars=6000))
+        if "general-purpose" in r
+    ]
+    assert rows and "ajan adayı" in rows[0] and "| 6 |" in rows[0]
+
+
+def test_the_agents_line_counts_jobs_that_pass_the_standard(tmp_path: Path) -> None:
+    head = summary(three_days(tmp_path, main_chars=6000, gp_chars=6000))
+    agents = next(r for r in head.splitlines() if r.startswith("| Ajanlar |"))
+    assert "2 iş ölçülen ajan koşullarını geçiyor" in agents
+    assert "ajan adaylarını yaz" in agents
+
+
+def test_main_session_reads_are_measured_per_user_message(tmp_path: Path) -> None:
+    # Each read is small, but one message's three reads add up to more than a
+    # summary: an agent doing that message's reading would pay off.
+    text = three_days(tmp_path, main_chars=2000, per_turn=3)
+    rows = [r for r in candidates_table(text) if "tracker" in r]
+    assert rows and "ajan adayı" in rows[0] and "| 6 |" in rows[0]
+
+
+def test_work_with_no_visible_trace_is_not_a_candidate(tmp_path: Path) -> None:
+    # A shell-only job leaves no trace of what it read or wrote.
+    text = three_days(tmp_path, gp_chars=6000, gp_tool="Bash")
+    assert not any(r.startswith("| - → - |") for r in candidates_table(text))
+
+
+def test_main_session_work_an_existing_agent_can_do_points_to_it(
+    tmp_path: Path,
+) -> None:
+    reader = agents.AgentDef(
+        "tracker-reader", frozenset({"mcp__tracker__get_issue"}), "haiku"
+    )
+    text = three_days(
+        tmp_path, main_chars=2000, per_turn=3, catalog={"tracker-reader": reader}
+    )
+    found = [r for r in finding(text, "A") if "`tracker`" in r]
+    assert found and "`tracker-reader`" in found[0]
+
+
+def test_writes_to_an_outside_system_are_not_reading_work(tmp_path: Path) -> None:
+    text = three_days(tmp_path, main_chars=6000, main_tool="mcp__tracker__update_issue")
+    assert not any("tracker" in r for r in candidates_table(text))
+
+
+def test_a_small_weekly_saving_is_not_worth_an_agent(tmp_path: Path) -> None:
+    high = Rules(min_weekly_tokens=10**9, big_result_chars=100, cold_write_tokens=10)
+    rows = [
+        r
+        for r in candidates_table(three_days(tmp_path, main_chars=6000, rules=high))
+        if "tracker" in r
+    ]
+    assert rows and "değmez: haftalık kazanç küçük" in rows[0]
+
+
+def test_an_agent_granted_only_another_tool_of_the_system_is_not_named(
+    tmp_path: Path,
+) -> None:
+    writer = agents.AgentDef(
+        "tracker-writer", frozenset({"mcp__tracker__update_issue"}), "haiku"
+    )
+    text = three_days(
+        tmp_path, main_chars=2000, per_turn=3, catalog={"tracker-writer": writer}
+    )
+    found = [r for r in finding(text, "A") if "`tracker`" in r]
+    assert found and "tracker-writer" not in found[0]

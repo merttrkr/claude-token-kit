@@ -420,3 +420,29 @@ def test_externals_include_shell_http(
     used: list[tuple[str, str | None]], found: set[str]
 ) -> None:
     assert agents.externals(used, RULES) == found
+
+
+def unit(session: str, day: int, chars: int, tools: set[str]) -> agents.Unit:
+    return agents.Unit(session, f"2026-10-{day:02d}", chars, frozenset(tools))
+
+
+def test_fit_applies_the_agent_standard() -> None:
+    # Six calls over three sessions and days, each reading more than a summary.
+    ok = [unit(f"s{i % 3}", i % 3 + 1, 8000, {"Read", "Grep"}) for i in range(6)]
+    assert agents.fit(ok).verdict(Rules()) == "ajan adayı"
+    assert agents.fit(ok[:2]).verdict(Rules()) == "tekrar etmiyor"
+    # Results no bigger than the summary an agent would return: not worth it.
+    small = [agents.Unit(u.session, u.day, 500, u.tools) for u in ok]
+    assert agents.fit(small).verdict(Rules()).startswith("değmez")
+    # Half the calls use tools of their own: no fixed scope to lock down.
+    mixed = ok[:3] + [unit(f"s{i}", i + 1, 8000, {f"T{i}"}) for i in range(3)]
+    assert agents.fit(mixed).scope == 0.5
+    assert agents.fit(mixed).verdict(Rules()).startswith("aday, ama")
+
+
+def test_a_known_saving_decides_over_the_median() -> None:
+    # Most messages read little, a few read a lot: the median is small, but what
+    # an agent would keep out of the main context is large.
+    units = [unit(f"s{i % 3}", i % 3 + 1, 1000, {"jira"}) for i in range(6)]
+    assert agents.fit(units, saving=50_000).verdict(Rules()) == "ajan adayı"
+    assert agents.fit(units, saving=10).verdict(Rules()).startswith("değmez")

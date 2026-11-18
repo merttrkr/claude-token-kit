@@ -1,7 +1,7 @@
 {
   "name": "token-lab",
   "description": "Token map: finds where your Claude Code tokens go and which ones should not be there at all, from your own transcripts. Read-only.",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "author": {
     "name": "Mert Türker"
   },

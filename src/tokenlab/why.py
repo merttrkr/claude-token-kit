@@ -19,7 +19,16 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import median
 
-from tokenlab.agents import GENERIC
+from tokenlab.agents import (
+    GENERIC,
+    NO_TRACE,
+    AgentDef,
+    Fit,
+    Unit,
+    fit,
+    route,
+    window,
+)
 from tokenlab.rules import DEFAULT, Rules
 
 INF = 1 << 62
@@ -59,6 +68,12 @@ ATTACHMENT = {
     "hook": "hook_additional_context",
 }
 MD_LINK = re.compile(r"\]\(([^)\s]+\.md)\)")
+# An MCP tool that changes the outside system rather than reading it.
+WRITE_TOOL = re.compile(
+    r"(?:^|_)(?:create|update|delete|remove|transition|add|edit|post|put|patch"
+    r"|send|set|write|upload|merge|move|assign|link)(?:_|$)",
+    re.IGNORECASE,
+)
 # Claude Code's own price ratios to plain input: a cache read 0.1, a 5-minute cache
 # write 1.25, a 1-hour write 2. Opus 5.5 reads at 0.05, so the weights are approximate.
 READ, WRITE_5M, WRITE_1H = 0.1, 1.25, 2.0
@@ -186,7 +201,12 @@ def _share(part: float, whole: float) -> str:
     return "<%1" if part / whole < 0.01 else f"%{part / whole * 100:.0f}"
 
 
-def render(conn: sqlite3.Connection, days: int = 30, rules: Rules = DEFAULT) -> str:
+def render(
+    conn: sqlite3.Connection,
+    days: int = 30,
+    rules: Rules = DEFAULT,
+    catalog: dict[str, AgentDef] | None = None,
+) -> str:
     win = _window(conn, days)
     if win is None:
         return "Henüz hiç Claude Code isteği yok: birkaç oturumdan sonra tekrar dene.\n"
@@ -480,6 +500,119 @@ def render(conn: sqlite3.Connection, days: int = 30, rules: Rules = DEFAULT) -> 
                 "gerçekten gerekiyor mu bak; gerekmiyorsa yazma kuralını daralt",
             )
 
+    # A: an outside system read by the main session itself, again and again. An
+    # agent msg_reads it and returns a summary, so the results leave the main context.
+    # Errors and writes (create, update, transition, ...) are not reading work.
+    by_system: dict[str, list[tuple[str, str, int, str, str, int, str]]] = defaultdict(
+        list
+    )
+    for tid, tuid, seq, ts, tool, chars, sid in conn.execute(
+        "SELECT c.thread_id, c.tool_use_id, c.request_seq, c.ts, c.tool, c.chars,"
+        " t.session_id FROM content c JOIN threads t ON t.thread_id = c.thread_id"
+        " WHERE c.kind = 'tool_result' AND t.kind = 'main' AND c.is_error = 0"
+        " AND substr(c.tool, 1, 5) = 'mcp__' AND c.ts >= ?",
+        (start,),
+    ):
+        if WRITE_TOOL.search(tool.split("__", 2)[-1]):
+            continue
+        server = tool.split("__")[1]
+        system = rules.external.get(server, server)
+        by_system[system].append((tid, tuid, seq, ts, tool, chars, sid))
+    # Jobs measured against the agent standard: (job, where it runs, fit).
+    candidates: list[tuple[str, str, Fit]] = []
+    moved: set[tuple[str, str]] = set()
+    # When each user message arrived in each main thread, in request order.
+    prompts: dict[str, list[tuple[int, str]]] = defaultdict(list)
+    for tid, seq, ts in conn.execute(
+        "SELECT thread_id, request_seq, ts FROM turns"
+        " WHERE kind IN ('human', 'sdk', 'scheduled')"
+        " ORDER BY thread_id, request_seq, ts"
+    ):
+        prompts[tid].append((seq, ts))
+    for system, sys_reads in sorted(by_system.items()):
+        # One unit per user message: an agent would do that message's reading and
+        # return one summary, so its msg_reads count together.
+        per_turn: dict[tuple[str, int], list[tuple[int, str, int, str, str]]] = (
+            defaultdict(list)
+        )
+        for tid, _, seq, ts, tool, chars, sid in sys_reads:
+            turn = bisect_right(prompts.get(tid, []), (seq, ts))
+            per_turn[(tid, turn)].append((seq, ts, chars, tool, sid))
+        # What an agent would keep out of the main context: per message, what it
+        # read beyond a summary, for as long as main would have carried it.
+        saving = 0.0
+        for (tid, _), msg_reads in per_turn.items():
+            last_seq, last_ts = max((r[0], r[1]) for r in msg_reads)
+            excess = sum(r[2] for r in msg_reads) - rules.agent_read_chars
+            if excess > 0:
+                saving += weighted(excess, carry.after(tid, last_seq, last_ts))
+        sys_fit = fit(
+            [
+                Unit(
+                    msg_reads[0][4],
+                    min(r[1] for r in msg_reads)[:10],
+                    sum(r[2] for r in msg_reads),
+                    # One server's read tools are one allowlist: a fixed scope.
+                    frozenset({system}),
+                )
+                for msg_reads in per_turn.values()
+            ],
+            tok(saving * week),
+        )
+        verdict = sys_fit.verdict(rules)
+        if verdict == "tekrar etmiyor":
+            continue
+        candidates.append((f"`{system}` okuma", "ana oturum", sys_fit))
+        if verdict.startswith("değmez"):
+            continue
+        sys_raw, sys_cost = 0.0, 0.0
+        sys_tools: Counter[str] = Counter()
+        for tid, _, seq, ts, tool, chars, _ in sys_reads:
+            n = carry.after(tid, seq, ts)
+            sys_raw += chars * n
+            sys_cost += weighted(chars, n)
+            sys_tools[tool] += 1
+        # Existing agents granted the tools behind most of these msg_reads.
+        able = sorted(
+            a.name
+            for a in (catalog or {}).values()
+            if a.tools
+            and sum(n for t, n in sys_tools.items() if t in a.tools)
+            >= rules.scope_share * len(sys_reads)
+        )
+        before = len(findings)
+        add(
+            "A",
+            sys_raw,
+            sys_cost,
+            f"ana oturum `{system}` sistemini {len(sys_reads)} kez kendisi okudu"
+            f" ({sys_fit.sessions} oturum); sonuçlar sonraki her istekte taşındı",
+            "en çok: "
+            + _names(
+                [
+                    f"{t.split('__', 2)[-1]} ×{c}"
+                    for t, c in sorted(sys_tools.items(), key=lambda x: (-x[1], x[0]))
+                ],
+                3,
+            ),
+            (
+                f"{_names([f'`{a}`' for a in able], 3)} bu sistemi zaten okuyabiliyor:"
+                " ana oturum işi ona versin diye açıklamasını keskinleştir"
+                if able
+                else f"`{system}` okuyup kısa özet döndüren bir ajan yaz"
+            ),
+        )
+        if len(findings) > before:
+            moved |= {(g[0], g[1]) for g in sys_reads}
+    # Recurring general-purpose jobs no existing agent covers.
+    in_window, longer = window(conn, days, rules, end)
+    for sig, jobs in sorted(route(in_window, longer, catalog or {})[1].items()):
+        if sig == NO_TRACE:  # what it read or wrote is not visible
+            continue
+        gp_fit = fit([Unit(c.session, c.day, c.read_chars, c.tools) for c in jobs])
+        if gp_fit.verdict(rules) != "tekrar etmiyor":
+            candidates.append((sig, "general-purpose", gp_fit))
+
     # R: large tool results and files read again and again.
     big: Counter[str] = Counter()
     big_raw: Counter[str] = Counter()
@@ -487,13 +620,13 @@ def render(conn: sqlite3.Connection, days: int = 30, rules: Rules = DEFAULT) -> 
     biggest: Counter[str] = Counter()
     # Which files cost the most: the evidence a user can act on.
     big_files: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
-    for tid, seq, tool, chars, ts, target in conn.execute(
-        "SELECT thread_id, request_seq, tool, chars, ts, target FROM content"
-        " WHERE kind = 'tool_result' AND chars >= ? AND ts >= ?",
+    for tid, tuid, seq, tool, chars, ts, target in conn.execute(
+        "SELECT thread_id, tool_use_id, request_seq, tool, chars, ts, target"
+        " FROM content WHERE kind = 'tool_result' AND chars >= ? AND ts >= ?",
         (rules.big_result_chars, start),
     ):
         n = carry.after(tid, seq, ts)
-        if not n:
+        if not n or (tid, tuid) in moved:  # an agent candidate above counts it
             continue
         tool = tool or "?"
         big[tool] += 1
@@ -678,6 +811,12 @@ def render(conn: sqlite3.Connection, days: int = 30, rules: Rules = DEFAULT) -> 
                 found = head + ("; " + found if mine else "")
                 if latest >= 0.2:
                     todo = "tekrar eden işleri isimli bir ajana taşı (5. bölüm)"
+            ready = [c for c in candidates if c[2].verdict(rules) == "ajan adayı"]
+            if ready:
+                found = (found + "; " if found else "") + (
+                    f"{len(ready)} iş ölçülen ajan koşullarını geçiyor"
+                )
+                todo = "2. bölüm sonundaki ajan adaylarını yaz (`agent.md`)"
         elif code == "H":
             share = tok(hook_cost * week)
             if hook_raw or hooks:
@@ -766,6 +905,51 @@ def render(conn: sqlite3.Connection, days: int = 30, rules: Rules = DEFAULT) -> 
         ]
     else:
         lines.append("Eşiği geçen bulgu yok.")
+    if candidates:
+        rank = {"ajan adayı": 0}
+        lines += [
+            "",
+            "### Ajan adayları (ajan standardına göre)",
+            "",
+            f"Tekrar eden = {rules.min_recur}+ çağrı, {rules.min_sessions}+"
+            f" oturum, {rules.min_days}+ gün. Birim: ajan çağrısı; ana oturumda bir"
+            " kullanıcı mesajı için yapılan okumalar. Çok okuyan = birim başına"
+            f" {rules.agent_read_chars:,}+ karakter (bir ajan özetinden büyük)."
+            f" Sabit kapsam = çağrıların %{rules.scope_share * 100:.0f}+'ı"
+            " işin çekirdek araçlarıyla yetiniyor (ana oturum işinde tek sunucu tek"
+            " izin listesidir, hep sabit sayılır; hükmü okunan boyut verir). Modelin"
+            " işi yönetmesi"
+            " gerekip gerekmediği ölçülmez: `references/agent.md`.",
+            "",
+            "| iş (okuduğu → yazdığı) | nerede | birim | oturum | gün"
+            " | okunan (medyan karakter) | haftalık kazanç (tahmini token)"
+            " | çekirdek araçlarla | hüküm |",
+            "|---|---|---|---|---|---|---|---|---|",
+        ]
+        ranked_jobs = sorted(
+            candidates,
+            key=lambda c: (rank.get(c[2].verdict(rules), 1), -c[2].calls, c[1], c[0]),
+        )
+        for job, where, jf in ranked_jobs[: rules.max_candidates]:
+            lines.append(
+                f"| {job} | {where} | {jf.calls} | {jf.sessions} | {jf.days}"
+                f" | {jf.read_chars:,}"
+                f" | {f'{jf.saving:,}' if jf.saving is not None else '-'}"
+                f" | %{jf.scope * 100:.0f}"
+                f" | {jf.verdict(rules)} |"
+            )
+        hidden = ranked_jobs[rules.max_candidates :]
+        if hidden:
+            passing = sum(c[2].verdict(rules) == "ajan adayı" for c in hidden)
+            lines += [
+                "",
+                f"+{len(hidden)} iş daha"
+                + (
+                    f", {passing} tanesi ajan adayı."
+                    if passing
+                    else "; hiçbiri koşulları geçmiyor."
+                ),
+            ]
     lines += [
         "",
         "Maliyet = girdi-eşdeğeri token: önbellekten okunan token 0.1, önbelleğe"

@@ -107,6 +107,7 @@ class Call:
     total_cost: float  # USD of the whole thread
     errors: tuple[str, ...]  # tool of each result that came back as an error, sorted
     description: str
+    read_chars: int = 0  # tool-result characters the thread took in
     signature: str = field(init=False)
 
     def __post_init__(self) -> None:
@@ -250,15 +251,18 @@ def calls(conn: sqlite3.Connection, days: int, rules: Rules = DEFAULT) -> list[C
     wanted = {r[0] for r in rows}
     used_by: dict[str, list[tuple[str, str | None]]] = defaultdict(list)
     errors_by: dict[str, list[str]] = defaultdict(list)
-    for tid, kind, name, target, is_error in conn.execute(
-        "SELECT thread_id, kind, tool, target, is_error FROM content"
+    read_by: Counter[str] = Counter()
+    for tid, kind, name, target, is_error, chars in conn.execute(
+        "SELECT thread_id, kind, tool, target, is_error, chars FROM content"
     ):
         if tid not in wanted:
             continue
         if kind == "tool_use" and name:
             used_by[tid].append((str(name), target))
-        elif kind == "tool_result" and is_error:
-            errors_by[tid].append(str(name or "?"))
+        elif kind == "tool_result":
+            read_by[tid] += chars or 0
+            if is_error:
+                errors_by[tid].append(str(name or "?"))
     out = []
     for (
         tid,
@@ -297,9 +301,67 @@ def calls(conn: sqlite3.Connection, days: int, rules: Rules = DEFAULT) -> list[C
                 total_cost,
                 tuple(sorted(errors_by.get(tid, []))),
                 desc or "",
+                read_by[tid],
             )
         )
     return out
+
+
+@dataclass(frozen=True)
+class Unit:
+    """One call of a job: an agent thread, or one tool call made in a main session."""
+
+    session: str
+    day: str
+    read_chars: int  # tool-result characters the call took in
+    tools: frozenset[str]
+
+
+@dataclass(frozen=True)
+class Fit:
+    """A job measured against the agent standard (skills/token-lab/references)."""
+
+    calls: int
+    sessions: int
+    days: int
+    read_chars: int  # median per call
+    scope: float  # share of calls that used only the job's core tools
+    # Estimated weekly tokens an agent would keep out of the main context; None
+    # when the job already runs in an agent.
+    saving: int | None = None
+
+    def verdict(self, rules: Rules) -> str:
+        if (
+            self.calls < rules.min_recur
+            or self.sessions < rules.min_sessions
+            or self.days < rules.min_days
+        ):
+            return "tekrar etmiyor"
+        # A known saving (main-session work) already counts only what a call read
+        # beyond a summary, for as long as main carried it: it decides alone.
+        if self.saving is not None:
+            if self.saving <= 0 or self.saving < rules.min_weekly_tokens:
+                return "değmez: haftalık kazanç küçük"
+        elif self.read_chars < rules.agent_read_chars:
+            return "değmez: sonuçlar bir özetten büyük değil"
+        if self.scope < rules.scope_share:
+            return "aday, ama araçları dağınık: önce işi böl"
+        return "ajan adayı"
+
+
+def fit(units: list[Unit], saving: int | None = None) -> Fit:
+    """Core tools are the ones at least half the calls use."""
+    counts = Counter(t for u in units for t in u.tools)
+    core = {t for t, n in counts.items() if 2 * n >= len(units)}
+    fixed = sum(u.tools <= core for u in units)
+    return Fit(
+        len(units),
+        len({u.session for u in units}),
+        len({u.day for u in units}),
+        _med([u.read_chars for u in units]),
+        fixed / len(units) if units else 0.0,
+        saving,
+    )
 
 
 def _med(xs: list[int]) -> int:
@@ -339,6 +401,53 @@ def _short(tool: str) -> str:
     return tool.rsplit("__", 1)[-1] if tool.startswith("mcp__") else tool
 
 
+def window(
+    conn: sqlite3.Connection,
+    days: int,
+    rules: Rules = DEFAULT,
+    end: str | None = None,
+) -> tuple[list[Call], list[Call]]:
+    """Subagent calls in the window, and on the longer window existing agents are
+    judged on. The window ends at `end`, else at the last subagent call."""
+    long = calls(conn, max(days, rules.retire_days), rules)
+    if not long:
+        return [], []
+    end = end or max(c.first_ts for c in long)
+    start = (datetime.fromisoformat(end) - timedelta(days=days)).isoformat()
+    return [c for c in long if c.first_ts >= start.replace("+00:00", "Z")], long
+
+
+def route(
+    cs: list[Call], long: list[Call], catalog: dict[str, AgentDef]
+) -> tuple[dict[str, list[Call]], dict[str, list[Call]], Counter[str]]:
+    """Generic calls an existing agent could have taken (by agent), the rest grouped
+    by job, and why some matched a job but not its agent."""
+    by_agent: dict[str, list[Call]] = defaultdict(list)
+    for c in cs:
+        by_agent[c.agent].append(c)
+    misrouted: dict[str, list[Call]] = defaultdict(list)
+    clusters: dict[str, list[Call]] = defaultdict(list)
+    skipped: Counter[str] = Counter()
+    # An agent's job is what its own calls did; an agent with no calls has none yet.
+    long_by: dict[str, list[Call]] = defaultdict(list)
+    for c in long:
+        long_by[c.agent].append(c)
+    job = {name: _job(long_by.get(name, [])) for name in sorted(catalog)}
+    for c in cs:
+        if c.agent not in GENERIC:
+            continue
+        same = [a for a in catalog.values() if job[a.name] == c.signature]
+        fits = [a for a in same if a.tools is None or c.tools <= a.tools]
+        if fits:
+            best = min(fits, key=lambda a: (-len(by_agent.get(a.name, [])), a.name))
+            misrouted[best.name].append(c)
+        else:
+            if same:
+                skipped["same job, but used tools the agent lacks"] += 1
+            clusters[c.signature].append(c)
+    return misrouted, clusters, skipped
+
+
 def render(
     conn: sqlite3.Connection,
     catalog: dict[str, AgentDef],
@@ -346,12 +455,10 @@ def render(
     days: int = 30,
     rules: Rules = DEFAULT,
 ) -> str:
-    long = calls(conn, max(days, rules.retire_days), rules)
+    cs, long = window(conn, days, rules)
     if not long:
         return "no subagent threads in the window\n"
     end = max(c.first_ts for c in long)
-    start = (datetime.fromisoformat(end) - timedelta(days=days)).isoformat()
-    cs = [c for c in long if c.first_ts >= start.replace("+00:00", "Z")]
     by_agent: dict[str, list[Call]] = defaultdict(list)
     for c in cs:
         by_agent[c.agent].append(c)
@@ -389,25 +496,11 @@ def render(
 
     # 1. Generic calls an existing agent could have taken.
     lines += ["", "## Generic calls an existing agent covers", ""]
-    generic = [c for c in cs if c.agent in GENERIC]
-    rest: list[Call] = []
-    misrouted: dict[str, list[Call]] = defaultdict(list)
-    skipped: Counter[str] = Counter()
-    # An agent's job is what its own calls did; an agent with no calls has none yet.
+    misrouted, clusters, skipped = route(cs, long, catalog)
     long_by: dict[str, list[Call]] = defaultdict(list)
     for c in long:
         long_by[c.agent].append(c)
     job = {name: _job(long_by.get(name, [])) for name in sorted(catalog)}
-    for c in generic:
-        same = [a for a in catalog.values() if job[a.name] == c.signature]
-        fits = [a for a in same if a.tools is None or c.tools <= a.tools]
-        if fits:
-            best = min(fits, key=lambda a: (-len(by_agent.get(a.name, [])), a.name))
-            misrouted[best.name].append(c)
-        else:
-            if same:
-                skipped["same job, but used tools the agent lacks"] += 1
-            rest.append(c)
     if misrouted:
         lines += [
             "| should go to | calls | sessions | median first now | agent median"
@@ -433,9 +526,6 @@ def render(
         lines.append(f"Not routed, {why}: {n}")
 
     # 2. Recurring generic jobs no agent covers.
-    clusters: dict[str, list[Call]] = defaultdict(list)
-    for c in rest:
-        clusters[c.signature].append(c)
     lines += [
         "",
         "## Recurring generic jobs (pilot candidates, most sessions first)",

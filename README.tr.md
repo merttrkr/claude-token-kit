@@ -73,7 +73,7 @@ uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 
 - **En üst:** ana rakamlarla iki cümle, sonra her açıya bir satırlık **Özet** tablosu (araç çıktıları, cache, CLAUDE.md, hafıza, araçlar ve MCP, skill'ler, ajanlar, hook'lar; maliyetteki payı en büyük olan önce) ve **İlk adım**.
 - **1. bölüm:** her istekte tekrar giden kısım ve payı.
-- **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı.
+- **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı. Sonunda **ajan adayları** tablosu var: tekrar eden işler (general-purpose ajanlarda ya da ana oturumun kendisi okuduğu dış sistemlerde) ajan standardına göre ölçülür, tahmini haftalık kazancıyla.
   - Maliyet "girdi-eşdeğeri token"dır. Önbellekten okunan token yaklaşık 0.1, önbelleğe yazılan 1.25–2 sayılır (Claude Code'un fiyat oranları).
   - Abonelikte bunun kotaya etkisi ölçülmedi.
 - **"Zaten düzelmiş görünüyor":** son 2 günün oturumlarında artık görünmeyen öğeler. Önerilmez.

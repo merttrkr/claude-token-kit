@@ -9,7 +9,7 @@
       "name": "token-lab",
       "source": "./",
       "description": "Finds where your tokens go and which ones should not be there. Read-only.",
-      "version": "0.1.1"
+      "version": "0.1.2"
     }
   ]
 }

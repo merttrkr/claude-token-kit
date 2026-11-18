@@ -29,7 +29,7 @@ Kullanıcının dilinde, teknik olmayan biri anlayacak şekilde. Raporun "Özet"
 
 1. Raporun en üstteki iki kalın cümlesini rakamlarıyla söyle.
 2. "Özet" tablosundaki her açı için tek satır, tablodaki sırayla: ne bulundu, maliyetteki payı, ne yapılır. "sorun yok" olanları sonda tek satırda topla. Teknik terimi bir kelimeyle açıkla (ör. önbellek, bağlam).
-3. Ajanlar satırında general-purpose payını (ve varsa son 7 gün trendini) söyle. 5. bölümden: "Recurring generic jobs" tablosundaki en büyük yeni ajan adayını, "Generic calls an existing agent covers" tablosundan mevcut bir ajanın kaçırdığı en büyük işi, "Existing agents" tablosundan bir hüküm (emekli et, birleştir, araçları daralt) varsa onu adıyla ver.
+3. Ajanlar satırında general-purpose payını (ve varsa son günlerin trendini) söyle. 2. bölüm sonundaki "Ajan adayları" tablosundan hükmü "ajan adayı" olan işleri ve nerede çalıştıklarını (ana oturum ya da general-purpose) adıyla ver. 5. bölümden: "Recurring generic jobs" tablosundaki en büyük yeni ajan adayını, "Generic calls an existing agent covers" tablosundan mevcut bir ajanın kaçırdığı en büyük işi, "Existing agents" tablosundan bir hüküm (emekli et, birleştir, araçları daralt) varsa onu adıyla ver.
 4. Cache ve hook satırları gözlemdir; kesin bir kazanç vaat etme.
 5. Maliyetin "girdi-eşdeğeri token" olduğunu, abonelikte kotaya etkisinin ölçülmediğini bir kez belirt.
 6. Sonda "İlk adım"ı söyle ve tek soru sor: "Bununla başlayalım mı?"
