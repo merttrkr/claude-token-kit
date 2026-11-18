@@ -1,0 +1,10 @@
+{
+  "name": "token-lab",
+  "description": "Token haritası: Claude Code token'larının nereye gittiğini ve hangilerinin hiç olmaması gerektiğini kendi transcript'lerinden bulur. Salt okunur.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Mert Türker"
+  },
+  "license": "MIT",
+  "repository": "https://github.com/merttrkr/claude-token-kit"
+}

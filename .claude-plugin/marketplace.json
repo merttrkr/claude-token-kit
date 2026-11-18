@@ -1,0 +1,15 @@
+{
+  "name": "token-kit",
+  "owner": {
+    "name": "Mert Türker"
+  },
+  "description": "Claude Code token haritası.",
+  "plugins": [
+    {
+      "name": "token-lab",
+      "source": "./",
+      "description": "Token'ların nereye gittiğini ve hangilerinin olmaması gerektiğini bulur. Salt okunur.",
+      "version": "0.1.0"
+    }
+  ]
+}

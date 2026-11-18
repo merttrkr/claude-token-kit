@@ -1,0 +1,40 @@
+tokenlab report v1: OTel era 2026-10-01T10:00:03.000Z .. 2026-10-01T10:00:10.000Z
+requests 4  sessions 1  cost USD 0.0125 (OTel cost_usd)
+
+by thread
+  thread                                  n      output     cache_read  cache_write         USD  share
+  main                                    2          66          1,000        1,200      0.0111  89.1%
+  test-writer                             1          50              0          300      0.0013  10.1%
+  hidden: generate_session_title          1          20              0            0      0.0001   0.8%
+
+by mechanism (catalog prices)
+  cache write 1h                              1,500      0.0108  83.4%
+  output: visible                               104      0.0016  12.2%
+  output: thinking                               12      0.0002   1.9%
+  cache read                                  1,000      0.0002   1.5%
+  input (uncached)                              910      0.0001   0.9%
+  output: hidden requests                        20      0.0000   0.1%
+  cache write 5m                                  0      0.0000   0.0%
+  catalog-priced 0.0129 vs OTel 0.0125
+
+by model and effort
+  model                      effort        n      output    thinking         USD
+  claude-opus-5-5            high          2          66          12      0.0111
+  claude-sonnet-5-5          high          1          50           0      0.0013
+  claude-haiku-5-5           -             1          20           0      0.0001
+
+cold starts (first request of a thread)
+  main                                    1          1,000      0.0060
+  test-writer                             1            300      0.0013
+
+cache rewrites (read < previous prompt - 5,000)
+  none
+
+most read files
+  /x/a.py                                                                reads   1 chars        600 threads 1
+
+longest-lived tool results (chars x later requests)
+  main                 Read                     /x/a.py                                        600 x    1 =           600
+
+busiest spawns
+  test-writer              Write tests                                            1    0.0013

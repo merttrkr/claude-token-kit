@@ -1,0 +1,12 @@
+tokenlab simulate v1: OTel era 2026-10-01T10:00:03.000Z .. 2026-10-01T10:00:10.000Z
+transcript threads 2  requests 3  recorded USD 0.0129 (catalog)
+hidden requests USD 0.0001, kept as recorded
+identity fidelity on 1 predicted requests 1.0000 (gate 0.98): PASS
+
+  policy                              simulated USD  vs identity          kind
+  identity                                   0.0129       0.0000          exact
+  main thread TTL 5m                         0.0092      -0.0036  -28.0%  exact
+  Opus subagents on Haiku 5.5                0.0129      +0.0000   +0.0%  depends on behavior
+  Opus subagents on Sonnet 5.5               0.0129      +0.0000   +0.0%  depends on behavior
+  every thread TTL 1h                        0.0129      +0.0000   +0.0%  exact
+  subagent TTL 1h                            0.0129      +0.0000   +0.0%  exact
