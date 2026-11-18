@@ -3,13 +3,13 @@
   "owner": {
     "name": "Mert Türker"
   },
-  "description": "Claude Code token haritası.",
+  "description": "Claude Code token map.",
   "plugins": [
     {
       "name": "token-lab",
       "source": "./",
-      "description": "Token'ların nereye gittiğini ve hangilerinin olmaması gerektiğini bulur. Salt okunur.",
-      "version": "0.1.0"
+      "description": "Finds where your tokens go and which ones should not be there. Read-only.",
+      "version": "0.1.1"
     }
   ]
 }

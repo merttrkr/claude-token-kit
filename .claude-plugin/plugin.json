@@ -1,7 +1,7 @@
 {
   "name": "token-lab",
-  "description": "Token haritası: Claude Code token'larının nereye gittiğini ve hangilerinin hiç olmaması gerektiğini kendi transcript'lerinden bulur. Salt okunur.",
-  "version": "0.1.0",
+  "description": "Token map: finds where your Claude Code tokens go and which ones should not be there at all, from your own transcripts. Read-only.",
+  "version": "0.1.1",
   "author": {
     "name": "Mert Türker"
   },

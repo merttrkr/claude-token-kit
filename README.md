@@ -1,107 +1,120 @@
-# Token haritası (token-lab)
+# Token map (token-lab)
 
-> **Deneme sürümü (0.1).** Şimdilik sadece Windows'ta ve birkaç kişinin verisiyle denendi. Gördüğün sorunu ya da garip sonucu [Issues](https://github.com/merttrkr/claude-token-kit/issues) sayfasına yaz.
+**English** · [Türkçe](README.tr.md)
 
-Claude Code her istekte modele bir sürü şey gönderir: araç tanımları, skill ve ajan listeleri, CLAUDE.md, hafıza dosyaları, önceki araç çıktıları. Bu araç **senin kendi** konuşma kayıtlarına bakar ve iki soruyu cevaplar:
+> **Trial version (0.1).** Works on Windows, macOS and Linux. Tested on Windows and Linux so far (not yet on macOS), with data from a few people. If you see a problem or an odd result, post it on the [Issues](https://github.com/merttrkr/claude-token-kit/issues) page.
 
-1. Token'larım nereye gidiyor?
-2. Hangileri hiç olmamalı?
+Claude Code sends the model a lot with every request: tool definitions, skill and agent lists, CLAUDE.md, memory files, earlier tool output. This tool looks at **your own** conversation logs and answers two questions:
 
-Örnek bulgular:
+1. Where do my tokens go?
+2. Which of them should not be there at all?
 
-- "41 skill listede, 3'ü kullanıldı; her istekte 4 bin token."
-- "Bir MCP sunucusunun 9 aracı 30 günde hiç çağrılmadı."
-- "277 kez önbellek soğudu: uzun aradan sonra tüm bağlam yeniden yazıldı."
-- "Bir dosya aynı oturumda 22 kez baştan okundu."
+Example findings:
 
-Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü yazar.
+- "41 skills in the list, 3 were used; 4k tokens on every request."
+- "9 tools of one MCP server were never called in 30 days."
+- "The cache went cold 277 times: after a long pause the whole context was written again."
+- "One file was read from the start 22 times in the same session."
 
-## Güvenlik
+Each finding shows what it cost, the evidence, and a one-sentence fix.
 
-- **Salt okunur.** Hiçbir ayarı ya da dosyayı değiştirmez. Okuduğu yerler:
-  - `~/.claude/projects` altındaki kayıtlar
-  - `~/.claude/agents` ve `~/.claude/skills`
-  - kayıtlarda adı geçen hafıza index'leri (`MEMORY.md`)
-- **Bir şey göndermez.** Rapor ağa çıkmaz. Yalnızca ilk çalıştırmada `uv` paketi kurar; gerekirse Python'u da indirir.
-- **Kurulum durumu yok.** Hook, arka plan programı, zamanlanmış görev kurmaz.
-- Bir bulguyu uygulamak istersen Claude'a söylersin; o da dosyayı ve farkı gösterip onayını alarak uygular.
+## Safety
 
-## Kurulum
+- **Read-only.** It changes no setting and no file. It reads:
+  - the logs under `~/.claude/projects`
+  - `~/.claude/agents` and `~/.claude/skills`
+  - the memory indexes (`MEMORY.md`) named in the logs
+- **Sends nothing.** The report never leaves your machine. Only the first run installs the `uv` package and, if needed, downloads Python.
+- **Leaves nothing running.** No hook, no background program, no scheduled task.
+- If you want to apply a finding, tell Claude; it shows the file and the diff and applies it only after you say yes.
 
-En kolayı: Claude Code'a bu sayfanın linkini verip **"bunu kur"** de. Ya da PowerShell'de tek komut:
+## Install
+
+Easiest: give Claude Code the link to this page and say **"install this"**. Or one command.
+
+Windows (PowerShell):
 
 ```powershell
 irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
 ```
 
-[`install.ps1`](install.ps1) sadece şunları yapar: Claude Code kurulu mu bakar, `uv` yoksa `winget` ile kurar, bu plugin'i ekler ve kurar. Başka hiçbir ayara dokunmaz; kısa, açıp okuyabilirsin.
+macOS / Linux:
 
-Sonra Claude Code'u yeniden aç ve `/token-lab:token-lab` yaz.
+```sh
+curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh
+```
 
-> **Claude için kurulum adımları** (kullanıcı bu repoyu kurmanı istediyse):
-> 1. PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`
-> 2. Çıktıda "Kuruldu." yoksa, yazan hatayı kullanıcıya olduğu gibi söyle ve dur.
-> 3. Kullanıcıya şunu söyle: "Kuruldu. Bu oturumda `/reload-plugins` yaz ya da Claude'u yeniden aç, sonra `/token-lab:token-lab` yaz."
-> 4. Kurulum dışında hiçbir ayarı değiştirme.
+[`install.ps1`](install.ps1) and [`install.sh`](install.sh) only do this: check that Claude Code is installed, install `uv` if missing (`winget` on Windows, uv's own installer on macOS/Linux), then add and install this plugin. It touches no other setting; it is short, so you can read it.
 
-Elle kurmak istersen: önce [uv](https://docs.astral.sh/uv/) (`winget install astral-sh.uv`), sonra Claude Code içinden:
+Then restart Claude Code and type `/token-lab:token-lab`.
+
+> **Install steps for Claude** (if the user asked you to install this repo):
+> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh`
+> 2. If the output has no "Installed", tell the user the error exactly as printed and stop.
+> 3. Tell the user: "Installed. Type `/reload-plugins` in this session or restart Claude, then type `/token-lab:token-lab`."
+> 4. Change no setting other than the install.
+
+To install by hand: first [uv](https://docs.astral.sh/uv/) (Windows: `winget install astral-sh.uv`; macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`), then from Claude Code:
 
 ```
 claude plugin marketplace add https://github.com/merttrkr/claude-token-kit
 claude plugin install token-lab@token-kit
 ```
 
-Sonra Claude'da `/token-lab:token-lab` yaz.
+Then type `/token-lab:token-lab` in Claude.
 
-Kurmadan, sadece raporu görmek için:
+To only see the report, without installing:
 
 ```
 uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 ```
 
-## Rapor nasıl okunur
+## How to read the report
 
-- **1. bölüm:** her istekte tekrar giden kısım ve payı.
-- **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı.
-  - Maliyet "girdi-eşdeğeri token"dır. Önbellekten okunan token yaklaşık 0.1, önbelleğe yazılan 1.25–2 sayılır (Claude Code'un fiyat oranları).
-  - Abonelikte bunun kotaya etkisi ölçülmedi.
-- **"Zaten düzelmiş görünüyor":** son 2 günün oturumlarında artık görünmeyen öğeler. Önerilmez.
-- **3. bölüm:** raporun göremedikleri. Oturum başlığı ve compaction istekleri kayıtlara yazılmıyor.
-- **4. bölüm:** en çok taşınan dosyalar. İstersen Claude bunları okuyup gereksiz satırları bulur. Bu kısım model yargısıdır.
-- **5. bölüm:** ajan işleri. Hangi tekrar eden iş isimli bir ajana taşınabilir, hangi ajan kullanılmıyor.
+The report text is in Turkish for now. `/token-lab:token-lab` has Claude summarize it in your language.
 
-Rapor ne kadar geriye bakabilir? Claude Code eski kayıtları `cleanupPeriodDays` ayarına göre siler (varsayılan 30 gün). Bu ayar senin.
+- **Top:** two sentences with the main numbers, then a **Summary** table with one line per angle (tool output, cache, CLAUDE.md, memory, tools and MCP, skills, agents, hooks), largest share of cost first, and the **First step**.
+- **Section 1:** the part sent again on every request, and its share.
+- **Section 2:** what should not be there, sorted by weekly cost.
+  - Cost is "input-equivalent tokens". A token read from cache counts about 0.1, a token written to cache 1.25–2 (Claude Code's price ratios).
+  - The effect on a subscription quota was not measured.
+- **"Already looks fixed":** items no longer seen in the last 2 days of sessions. Not suggested.
+- **Section 3:** what the report cannot see. Session titles and compaction requests are not written to the logs.
+- **Section 4:** the files carried the most. If you want, Claude reads them and finds lines you don't need. This part is model judgment.
+- **Section 5:** agent work. Which repeated work could move to a named agent, which agent is unused.
 
-## Kendi kuralların
+How far back can the report look? Claude Code deletes old logs based on the `cleanupPeriodDays` setting (default 30 days). That setting is yours.
 
-Eşikler ve alan adları `src/tokenlab/rules.py` içinde. Değiştirmek için `~/.claude/token-lab.toml` yaz:
+## Your own rules
+
+Thresholds and area names are in `src/tokenlab/rules.py`. To change them, write `~/.claude/token-lab.toml`:
 
 ```toml
 [why]
 min_weekly_tokens = 50000
 
-[[areas]]            # işlerini sınıflarken kullanılacak klasörler
+[[areas]]            # folders used to group your work
 name = "specs"
 path = "/specs/"
 
-[external]           # aynı sistemi gösteren MCP sunucuları
+[external]           # MCP servers that point at the same system
 "mcp-atlassian" = "jira"
 ```
 
-## Geri bildirim
+## Feedback
 
-Sorun ya da öneri için bu reponun **Issues** sayfası. Konuşma metni, dosya yolu ya da şirket bilgisi yapıştırma; issue'lar herkese açık.
+For a problem or an idea, use this repo's **Issues** page. Don't paste conversation text, file paths or company information; issues are public.
 
-## Kaldırma
+## Uninstall
 
 ```
 claude plugin uninstall token-lab@token-kit
 claude plugin marketplace remove token-kit
 ```
 
-Rapor hiçbir şey kurmadığı için geride iz kalmaz.
+The report itself writes nothing. What stays is `uv` and its cache (Python and packages); remove them with `uv cache clean` if you want.
 
-## Geliştirme
+## Development
 
 ```
 uv sync

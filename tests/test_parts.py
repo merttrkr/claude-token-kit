@@ -55,6 +55,7 @@ def test_attachments_split_into_parts(tmp_path: Path) -> None:
                 "mcp_instructions_delta", addedNames=["db"], addedBlocks=["## db\nuse"]
             ),
             att("deferred_tools_delta", addedNames=["Cron"], addedLines=["Cron"]),
+            att("hook_additional_context", content=["h" * 60], hookName="SessionStart"),
             assistant(2, "req_1", SONNET, content=[], input_tokens=5),
             att(
                 "nested_memory",
@@ -81,6 +82,7 @@ def test_attachments_split_into_parts(tmp_path: Path) -> None:
         (-1, "deferred", "Cron", len("Cron")),
         (-1, "file", "/h/.claude/CLAUDE.md", 40),
         (-1, "file", "/h/mem/MEMORY.md", 90),
+        (-1, "hook", "SessionStart", 60),
         (-1, "mcp", "db", len("## db\nuse")),
         (-1, "skill", "alpha", len("- alpha: does a")),
         (-1, "skill", "beta", len("- beta: does b, with: colon")),

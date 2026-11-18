@@ -76,7 +76,7 @@ AREA_RANK = ("code", "claude-config", "file", "scratch")
 SHELL_HTTP = re.compile(r"\bcurl\b|Invoke-(?:RestMethod|WebRequest)\b", re.I)
 NO_TRACE = "- → -"  # read nothing via Read, wrote nothing seen: work done in a shell
 NULL_DEVICES = frozenset({"/dev/null", "nul", "$null"})
-ABS_PATH = re.compile(r"(?:\b[A-Za-z]:[\\/]|(?<![\w.])/c/)[^\s;&|'\"<>]+")
+ABS_PATH = re.compile(r"(?:\b[A-Za-z]:[\\/]|(?<![\w.:/~$*|#])/)[^\s;&|'\"<>]+")
 REDIRECT = re.compile(r"(?:^|[^\d&])>>?\s*([^\s;&|>]+)")
 
 

@@ -93,6 +93,10 @@ def parts(a: dict[str, Any]) -> list[tuple[str, str, int]]:
         body = a.get("content")
         text = body.get("content") if isinstance(body, dict) else body
         return [("rule", str(a.get("path")), len(text or ""))]
+    if kind == "hook_additional_context":
+        body = a.get("content") or []
+        text = sum(len(x) for x in body if isinstance(x, str))
+        return [("hook", str(a.get("hookName") or a.get("hookEvent") or "hook"), text)]
     if kind == "invoked_skills":
         return [
             ("skill_body", str(s.get("name")), len(s.get("content") or ""))

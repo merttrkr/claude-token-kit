@@ -83,6 +83,14 @@ def conn(tmp_path: Path) -> sqlite3.Connection:
         ),
         at(shape, 0),
         at(
+            {
+                "type": "attachment",
+                "attachment": {"type": "hook_additional_context", "content": ["h"]},
+                "rendered": [{"content": "h" * 700}],
+            },
+            0,
+        ),
+        at(
             assistant(
                 0,
                 "req_0",
@@ -112,13 +120,25 @@ def conn(tmp_path: Path) -> sqlite3.Connection:
     (sub / "agent-s1.meta.json").write_text(
         json.dumps({"agentType": "scout", "toolUseId": "t3"})
     )
+    write_jsonl(
+        sub / "agent-g1.jsonl",
+        [at(assistant(0, "req_g", SONNET, content=[], input_tokens=50), 1)],
+    )
+    (sub / "agent-g1.meta.json").write_text(
+        json.dumps({"agentType": "general-purpose", "toolUseId": "t4"})
+    )
     db = tmp_path / "ledger.sqlite"
     ingest(root, db)
     return sqlite3.connect(db)
 
 
 def finding(text: str, code: str) -> list[str]:
-    return [r for r in text.splitlines() if r.startswith(f"| {code} |")]
+    section = text.split("## 2.", 1)[1].split("## 3.", 1)[0]
+    return [r for r in section.splitlines() if r.startswith(f"| {why.ANGLE[code]} |")]
+
+
+def summary(text: str) -> str:
+    return text.split("## 1.", 1)[0]
 
 
 def test_attachments_ride_until_compaction_and_tools_until_the_next_shape(
@@ -135,7 +155,7 @@ def test_unused_tools_skills_and_agents_are_findings(conn: sqlite3.Connection) -
     tools = " ".join(finding(text, "T"))
     assert "`Unused`" in tools and "MCP `srv`" in tools and "`Read`" not in tools
     skills = finding(text, "S")
-    assert any("senin 1 skill" in r and "idle-skill" in r for r in skills)
+    assert any("1 skill listede" in r and "idle-skill" in r for r in skills)
     assert any("`plug` plugin" in r and "plug:idle" in r for r in skills)
     assert "used-skill" not in " ".join(skills)
     agents = " ".join(finding(text, "A"))
@@ -155,8 +175,9 @@ def test_memory_lines_whose_file_was_never_read_or_is_gone(
 
 def test_big_results_and_cold_cache(conn: sqlite3.Connection) -> None:
     text = why.render(conn, 30, LOW)
-    assert any("`Read` 1 kez" in r for r in finding(text, "R"))
-    assert any("1 kez cache soğudu" in r for r in finding(text, "C"))
+    big = [r for r in finding(text, "R") if "`Read` 1 kez" in r]
+    assert big and "read-one.md" in big[0]  # the evidence names the file
+    assert "1 kez cache soğudu" in summary(text)
 
 
 def test_an_item_gone_from_recent_sessions_counts_as_fixed(
@@ -199,7 +220,10 @@ def test_a_carried_part_is_written_once_then_read() -> None:
 
 def test_findings_are_sorted_by_weighted_cost(conn: sqlite3.Connection) -> None:
     rows = [r.split(" | ") for r in why.render(conn, 30, LOW).splitlines()]
-    costs = [int(r[1].replace(",", "")) for r in rows if len(r) > 2 and len(r[0]) == 3]
+    angles = tuple(f"| {a}" for a in why.ANGLE.values())
+    section = why.render(conn, 30, LOW).split("## 2.", 1)[1].split("## 3.", 1)[0]
+    rows = [r.split(" | ") for r in section.splitlines() if r.startswith(angles)]
+    costs = [int(r[2].replace(",", "")) for r in rows]
     assert costs and costs == sorted(costs, reverse=True)
 
 
@@ -209,10 +233,9 @@ def test_a_finding_carries_the_formula_numbers(conn: sqlite3.Connection) -> None
     n = why.Carry(conn, "").shape(MAIN, 0)
     tpc, week = why.tokens_per_char(conn) or 0.25, 7.0  # a one-day window
     row = next(r for r in finding(why.render(conn, 30, LOW), "T") if "`Unused`" in r)
-    cost, raw = (int(x.replace(",", "")) for x in row.split(" | ")[1:3])
+    cost = int(row.split(" | ")[2].replace(",", ""))
     assert n == 4
     assert cost == int(why.weighted(chars, n) * week * tpc)
-    assert raw == int(chars * n * week * tpc)
 
 
 def test_report_is_byte_identical_after_a_rebuild(
@@ -227,3 +250,107 @@ def test_report_is_byte_identical_after_a_rebuild(
 def test_an_empty_ledger_says_so(tmp_path: Path) -> None:
     empty = create(tmp_path / "e.sqlite")
     assert "Henüz hiç Claude Code isteği yok" in why.render(empty, 30)
+
+
+def test_the_report_opens_with_a_summary_of_every_angle(
+    conn: sqlite3.Connection,
+) -> None:
+    head = summary(why.render(conn, 30, LOW))
+    assert head.index("## Özet") < head.index("## İlk adım")
+    # One line per angle, findings or not, so nothing is silently skipped.
+    for angle in why.ANGLE.values():
+        assert f"| {angle} |" in head
+    assert "kesilebilir" in head.lower()
+
+
+def test_cache_cooling_is_an_observation_not_the_first_step(
+    conn: sqlite3.Connection,
+) -> None:
+    text = why.render(conn, 30, LOW)
+    first = text.split("## İlk adım", 1)[1].split("##", 1)[0]
+    assert "cache" not in first.lower()
+    cache = next(r for r in summary(text).splitlines() if r.startswith("| Cache |"))
+    assert "gözlem" in cache
+
+
+def test_agents_line_gives_the_general_purpose_share(conn: sqlite3.Connection) -> None:
+    head = summary(why.render(conn, 30, LOW))
+    agents = next(r for r in head.splitlines() if r.startswith("| Ajanlar |"))
+    assert "general-purpose payı %50" in agents  # 1 of 2 subagent calls
+
+
+def test_hook_text_added_to_the_context_is_measured(conn: sqlite3.Connection) -> None:
+    head = summary(why.render(conn, 30, LOW))
+    hooks = next(r for r in head.splitlines() if r.startswith("| Hook'lar |"))
+    assert "hook metni" in hooks
+
+
+def test_hook_text_is_part_of_the_repeated_part(conn: sqlite3.Connection) -> None:
+    section = why.render(conn, 30, LOW).split("## 1.", 1)[1].split("## 2.", 1)[0]
+    assert "| hook metni |" in section
+
+
+def test_a_big_read_read_again_is_counted_once(tmp_path: Path) -> None:
+    # The same file read three times, each result big: one finding, not two.
+    root = tmp_path / "corpus"
+    records: list[dict[str, Any]] = []
+    for i in range(3):
+        records += [
+            at(
+                assistant(
+                    i,
+                    f"req_{i}",
+                    SONNET,
+                    content=[use(f"t{i}", "Read", file_path="/w/big.md")],
+                    input_tokens=10,
+                ),
+                i * 2,
+            ),
+            result(f"t{i}", 500, i * 2 + 1),
+        ]
+    records.append(at(assistant(3, "req_3", SONNET, content=[], input_tokens=10), 7))
+    write_jsonl(root / PROJECT / f"{MAIN}.jsonl", records)
+    db = tmp_path / "big.sqlite"
+    ingest(root, db)
+    rows = finding(why.render(sqlite3.connect(db), 30, LOW), "R")
+    assert any("`Read` 3 kez" in r for r in rows)
+    assert not any("kez okundu" in r for r in rows)
+
+
+def test_agent_trend_shows_the_last_week_and_the_last_days(tmp_path: Path) -> None:
+    # general-purpose on day 1 and day 10, a named agent on day 15.
+    root = tmp_path / "corpus"
+    day = "2026-10-{:02d}T10:00:00.000Z"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            {
+                **assistant(i, f"req_{i}", SONNET, content=[], input_tokens=10),
+                "timestamp": day.format(d),
+            }
+            for i, d in enumerate((1, 10, 15))
+        ],
+    )
+    sub = root / PROJECT / MAIN / "subagents"
+    for name, kind, d in (
+        ("a1", "general-purpose", 1),
+        ("a2", "general-purpose", 10),
+        ("a3", "scout", 15),
+    ):
+        write_jsonl(
+            sub / f"agent-{name}.jsonl",
+            [
+                {
+                    **assistant(0, f"req_{name}", SONNET, content=[], input_tokens=5),
+                    "timestamp": day.format(d),
+                }
+            ],
+        )
+        (sub / f"agent-{name}.meta.json").write_text(json.dumps({"agentType": kind}))
+    db = tmp_path / "trend.sqlite"
+    ingest(root, db)
+    head = summary(why.render(sqlite3.connect(db), 30, LOW))
+    agents = next(r for r in head.splitlines() if r.startswith("| Ajanlar |"))
+    assert "son 7 gün %50, son 2 gün %0" in agents
+    # The latest share is 0%: no advice to move work to a named agent.
+    assert "isimli bir ajana" not in agents

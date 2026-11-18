@@ -260,6 +260,20 @@ def test_area_of_a_path(path: str | None, area: str) -> None:
             ],
             "specs",
         ),
+        # The same on macOS and Linux paths; a URL is no path.
+        (
+            [
+                ("Bash", "cd /Users/me/repo/specs/x; cat > $TMPDIR/s3.txt <<'EOF'"),
+                ("Write", "/private/var/folders/x/T/claude/scratchpad/ins.py"),
+            ],
+            "specs",
+        ),
+        ([("Bash", "cd /home/me/specs/x && echo hi > note.txt")], "specs"),
+        ([("Bash", "curl https://x.io/specs/a > out.json")], None),
+        ([("Bash", "grep -l x src/**/*.cs > /c/t/log.txt")], None),
+        # A pattern is no path: `"a|/\.claude/"` names no area.
+        ([("Bash", r'grep -v -E "wt|/\.claude/" /tmp/a.txt > /tmp/b.txt')], "scratch"),
+        ([("Bash", "sed -i 's#/tmp/#/specs/#' local.txt")], None),
     ],
 )
 def test_output_area(used: list[tuple[str, str | None]], output: str | None) -> None:
