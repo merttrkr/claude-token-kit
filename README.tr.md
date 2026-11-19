@@ -44,9 +44,11 @@ macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh
 ```
 
-[`install.ps1`](install.ps1) ve [`install.sh`](install.sh) sadece şunları yapar: Claude Code kurulu mu bakar, `uv` yoksa kurar (Windows'ta `winget`, macOS/Linux'ta uv'nin kendi kurulum betiği), bu plugin'i ekler ve kurar. Başka hiçbir ayara dokunmaz; kısa, açıp okuyabilirsin.
+[`install.ps1`](install.ps1) ve [`install.sh`](install.sh) sadece şunları yapar: Claude Code kurulu mu bakar, `uv` yoksa kurar (Windows'ta `winget`, macOS/Linux'ta uv'nin kendi kurulum betiği), bu plugin'i ekler ve kurar, daha önce kapatmadıysan otomatik güncellemesini açar (`/plugin` → Marketplaces → token-kit'teki düğmenin aynısı). Başka hiçbir ayara dokunmaz; kısa, açıp okuyabilirsin.
 
 Sonra Claude Code'u yeniden aç ve `/token-lab:token-lab` yaz.
+
+**Güncelleme:** otomatik güncelleme açıkken Claude Code yeni sürümü oturum başladıktan birkaç dakika içinde kendisi alır ve "Plugin updated · Run /reload-plugins" der. Hemen güncellemek için kurulum komutunu yeniden çalıştır. Otomatik güncellemeyi kapatmak için: `/plugin` → Marketplaces → token-kit.
 
 > **Claude için kurulum adımları** (kullanıcı bu repoyu kurmanı istediyse):
 > 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh`
@@ -61,7 +63,7 @@ claude plugin marketplace add https://github.com/merttrkr/claude-token-kit
 claude plugin install token-lab@token-kit
 ```
 
-Sonra Claude'da `/token-lab:token-lab` yaz.
+Sonra Claude'da `/token-lab:token-lab` yaz. Otomatik güncelleme için `/plugin` → Marketplaces → token-kit'ten aç.
 
 Kurmadan, sadece raporu görmek için:
 
@@ -88,6 +90,7 @@ Rapor ne kadar geriye bakabilir? Claude Code eski kayıtları `cleanupPeriodDays
 Rapor ölçer; bu mod okur. Claude bağlamına giren her parçayı (CLAUDE.md'ler, kurallar, hafıza, skill'ler, ajanlar) en pahalıdan başlayarak placement standardına göre okur ve her satır için öneri verir: sil, kısalt, taşı (nereye) ya da birleştir. Eklenebilecekleri de önerir: tekrar eden bir araç hatası için hook, her oturumda okuduğun bir dosya için hafıza satırı, tekrar tekrar yaptığın bir düzeltme için kural.
 
 - Önce bir betik kesin olarak kontrol edilebilenleri listeler: artık olmayan yollar, system prompt'un zaten söylediği cümleler, aynı satırları paylaşan dosyalar.
+- Rapor kendi maddeleri bitince bunu önerir; istersen doğrudan da başlatabilirsin.
 - Token harcar: Claude tahmini söyler ve kaç parça okunacağını sorar.
 - Değişiklikler tek tek uygulanır; her birinde fark gösterilir, yedek alınır, onayın istenir.
 

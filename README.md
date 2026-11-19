@@ -44,9 +44,11 @@ macOS / Linux:
 curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh
 ```
 
-[`install.ps1`](install.ps1) and [`install.sh`](install.sh) only do this: check that Claude Code is installed, install `uv` if missing (`winget` on Windows, uv's own installer on macOS/Linux), then add and install this plugin. It touches no other setting; it is short, so you can read it.
+[`install.ps1`](install.ps1) and [`install.sh`](install.sh) only do this: check that Claude Code is installed, install `uv` if missing (`winget` on Windows, uv's own installer on macOS/Linux), then add and install this plugin, and turn on auto-update for it (the same switch as `/plugin` → Marketplaces → token-kit) unless you turned it off before. It touches no other setting; it is short, so you can read it.
 
 Then restart Claude Code and type `/token-lab:token-lab`.
+
+**Updates:** with auto-update on, Claude Code fetches a new version by itself within a few minutes of a session's start and says "Plugin updated · Run /reload-plugins". To update now, run the install command again. To turn auto-update off: `/plugin` → Marketplaces → token-kit.
 
 > **Install steps for Claude** (if the user asked you to install this repo):
 > 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh`
@@ -61,7 +63,7 @@ claude plugin marketplace add https://github.com/merttrkr/claude-token-kit
 claude plugin install token-lab@token-kit
 ```
 
-Then type `/token-lab:token-lab` in Claude.
+Then type `/token-lab:token-lab` in Claude. For auto-update, turn it on in `/plugin` → Marketplaces → token-kit.
 
 To only see the report, without installing:
 
@@ -90,6 +92,7 @@ How far back can the report look? Claude Code deletes old logs based on the `cle
 The report measures; this mode reads. Claude goes through every piece that enters your context (CLAUDE.md files, rules, memory, skills, agents), most expensive first, against the placement standard, and proposes for each line: delete, shorten, move (and where) or merge. It also proposes what to add: a hook for a tool error that keeps coming back, a memory line for a file you read in every session, a rule for a correction you keep making.
 
 - A script first lists what it can check for sure: paths that no longer exist, sentences the system prompt already says, files that share the same lines.
+- The report offers it once its own items are done; you can also start it directly.
 - It spends tokens: Claude tells you the estimate and asks how many pieces to read.
 - Changes are applied one at a time, each with a diff, a backup and your yes.
 

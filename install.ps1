@@ -1,7 +1,8 @@
 # token-lab kurulumu (Windows). Tek komut:
 #   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
-# Yaptiklari: claude var mi bakar, uv yoksa winget ile kurar, plugin'i ekler ve kurar.
-# Zaten kurulu olani atlar; baska hicbir ayara dokunmaz.
+# Yaptiklari: claude var mi bakar, uv yoksa winget ile kurar, plugin'i ekler ve kurar,
+# token-kit icin otomatik guncellemeyi acar (/plugin > Marketplaces'teki dugmenin yazdigi alan).
+# Zaten kurulu olani gunceller; baska hicbir ayara dokunmaz.
 
 $ErrorActionPreference = 'Stop'
 $Repo = 'https://github.com/merttrkr/claude-token-kit'
@@ -51,6 +52,51 @@ if (((claude plugin list 2>&1) -join "`n") -notmatch 'token-lab@token-kit') {
     return
 }
 
+# Auto-update: the same field the /plugin toggle writes, on the token-kit entry only.
+$AutoUpdate = @'
+import json, os, sys, time
+p = sys.argv[1]
+lock = p + ".lock"  # Claude Code's own lock: a folder next to the file
+try:
+    for _ in range(50):
+        try:
+            os.mkdir(lock)
+            break
+        except FileExistsError:
+            time.sleep(0.1)
+    else:
+        raise TimeoutError(lock)
+    try:
+        with open(p, encoding="utf-8") as f:
+            d = json.load(f)
+        e = d["token-kit"]
+        if "autoUpdate" not in e:  # never undo a user's own "off"
+            e["autoUpdate"] = True
+            with open(p + ".tmp", "w", encoding="utf-8") as f:
+                json.dump(d, f, indent=2, ensure_ascii=False)
+            os.replace(p + ".tmp", p)
+        result = "on" if e["autoUpdate"] else "user-off"
+    finally:
+        os.rmdir(lock)
+    print(result)
+except Exception:
+    print("off")
+'@
+$ConfigDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+$Known = Join-Path $ConfigDir 'plugins\known_marketplaces.json'
+$auto = & {
+    # Child scope: under irm | iex this script runs in the caller's session.
+    $ErrorActionPreference = 'Continue'  # Windows PowerShell turns native stderr into errors
+    ($AutoUpdate | uv run --no-project --quiet python - $Known 2>$null) -join ''
+}
+
 Write-Host ''
 Write-Host 'Installed. / Kuruldu.' -ForegroundColor Green
+if ($auto -eq 'on') {
+    Write-Host 'Auto-update is on; to turn it off: /plugin > Marketplaces > token-kit. / Otomatik guncelleme acik; kapatmak icin: /plugin > Marketplaces > token-kit.'
+} elseif ($auto -eq 'user-off') {
+    Write-Host 'Auto-update stays off, as you set it; to turn it on: /plugin > Marketplaces > token-kit. / Otomatik guncelleme sizin ayarinizla kapali kaliyor; acmak icin: /plugin > Marketplaces > token-kit.'
+} else {
+    Write-Host 'Could not turn on auto-update; turn it on in /plugin > Marketplaces > token-kit. / Otomatik guncelleme acilamadi; /plugin > Marketplaces > token-kit icinden acin.' -ForegroundColor Yellow
+}
 Write-Host 'Restart Claude Code (or type /reload-plugins in an open session), then / Claude Code''u yeniden ac, sonra:  /token-lab:token-lab'

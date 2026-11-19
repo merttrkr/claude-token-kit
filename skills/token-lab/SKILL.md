@@ -32,7 +32,8 @@ Kullanıcının dilinde, teknik olmayan biri anlayacak şekilde. Raporun "Özet"
 3. Ajanlar satırında general-purpose payını (ve varsa son günlerin trendini) söyle. 2. bölüm sonundaki "Ajan adayları" tablosundan hükmü "ajan adayı" olan işleri ve nerede çalıştıklarını (ana oturum ya da general-purpose) adıyla ver. 5. bölümden: "Recurring generic jobs" tablosundaki en büyük yeni ajan adayını, "Generic calls an existing agent covers" tablosundan mevcut bir ajanın kaçırdığı en büyük işi, "Existing agents" tablosundan bir hüküm (emekli et, birleştir, araçları daralt) varsa onu adıyla ver.
 4. Cache ve hook satırları gözlemdir; kesin bir kazanç vaat etme.
 5. Maliyetin "girdi-eşdeğeri token" olduğunu, abonelikte kotaya etkisinin ölçülmediğini bir kez belirt.
-6. Sonda "İlk adım"ı söyle ve tek soru sor: "Bununla başlayalım mı?"
+6. Raporun ölçemediğini tek cümleyle söyle: dosyaların içeriği (gereksiz, eskimiş ya da yanlış yerdeki satırlar) ve eksikler (hook, hafıza satırı, kural). Bunlara rapor maddelerinden sonra genel optimizasyonla bakılabilir; token harcar.
+7. Sonda "İlk adım"ı söyle ve tek soru sor: "Bununla başlayalım mı?"
 
 Çıktının tamamını sohbete yapıştırma; tabloları kullanıcı isterse aç.
 
@@ -42,7 +43,8 @@ Her seferinde tek madde:
 
 - Kullanıcı evet derse önce hedefi göster: hangi dosya ya da ayar, rapordaki kanıt, maliyetteki payı.
 - Madde bitince ya da kullanıcı atlarsa, payı en büyük sıradaki maddeyi öner ve yine tek soru sor.
-- Kullanıcı dur derse ya da kesilebilir madde kalmadıysa dur. Son cümle: "Bir hafta sonra `/token-lab:token-lab` ile yeniden çalıştır; uyguladıklarının payı düşmüş olmalı."
+- Kesilebilir madde kalmadıysa ya da kullanıcı kalanları atlarsa tek soru sor: "Şimdi dosyaları satır satır okuyan genel optimizasyona geçeyim mi? Token harcar; kapsamı birlikte belirleriz." Evet derse 4. adımın son paragrafına geç.
+- Kullanıcı dur derse ya da optimizasyonu istemezse 5. adıma geç.
 
 Bir dosyayı ya da ayarı değiştirmeden önce ilgili standardı oku ve ona göre yaz:
 
@@ -64,8 +66,11 @@ Raporun 4. bölümündeki dosyaları kullanıcı isterse oku. Her satırı `refe
 
 Bu kısım model yargısıdır; kullanıcıya öyle söyle. Silme ya da taşıma önerilerini 3. adımdaki gibi onayla uygula.
 
-Kullanıcı bütün parçaların (CLAUDE.md, kurallar, hafıza, skill'ler, ajanlar) satır satır incelenmesini, eksiklerin (hook, hafıza, kural) de önerilmesini isterse: "Bunun için `/token-lab:optimize` yaz; token harcar, kapsamı birlikte belirleriz." de.
+Genel optimizasyon: kullanıcı 3. adımın sonundaki soruya evet derse ya da herhangi bir anda bütün parçaların (CLAUDE.md, kurallar, hafıza, skill'ler, ajanlar) satır satır incelenmesini, eksiklerin (hook, hafıza, kural) de önerilmesini isterse, `${CLAUDE_PLUGIN_ROOT}/skills/optimize/SKILL.md`'yi oku ve 1. adımından başlayarak uygula. O skill kendiliğinden çağrılamaz; dosyasını okuyup adımlarını bu oturumda yürütürsün, kullanıcının `/token-lab:optimize` yazmasına gerek yok. Bitişte onun 7. adımı geçerli; bu skill'in 5. adımındaki satırı tekrar etme.
 
 ## 5. Bitiş
 
-Son satırda, kullanıcının dilinde: "Sorun ya da öneri: https://github.com/merttrkr/claude-token-kit/issues — konuşma metni, dosya yolu ya da şirket bilgisi yapıştırmayın."
+Son iki cümle, kullanıcının dilinde, bu sırayla:
+
+- "Bir hafta sonra `/token-lab:token-lab` ile yeniden çalıştır; uyguladıklarının payı düşmüş olmalı."
+- "Sorun ya da öneri: https://github.com/merttrkr/claude-token-kit/issues — konuşma metni, dosya yolu ya da şirket bilgisi yapıştırmayın."
