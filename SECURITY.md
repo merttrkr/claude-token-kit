@@ -15,12 +15,19 @@ Do not open a public issue for a vulnerability.
 
 ## What the tool promises
 
-- It reads local files only.
-- It makes no network calls. The only download is uvx's first-run install.
-- It never changes a file without your yes. The one exception: `tokenlab inventory` deletes its own leftover temporary folders (only its three files, older than 6 hours).
+For the supported commands (`why`, `inventory`) and the two skills:
+
+- They read local files only and make no network calls. The only download is uvx's first-run install.
+- They never change your files (settings, CLAUDE.md, rules, memory, skills, agents) without a diff and your yes.
+- Their own writes, all of them:
+  - `why`: a temporary database, deleted after the run; one line of numbers per run in `~/.claude/token-lab/history.jsonl` (`--no-history` turns it off).
+  - `inventory`: `inventory.md`, `pieces.md` and `system-prompt.md` in a new temporary folder, or in the folder given with `--out` (files of those names there are replaced); it deletes its own leftover temporary folders (only those three files, older than 6 hours).
+  - The installers: the plugin install through `claude`, and `autoUpdate` on the `token-kit` entry of `known_marketplaces.json`.
+
+The research commands (`ingest`, `probe`, `otel-sink`, `snapshot` and the others; see CONTRIBUTING.md) are not covered: they write ledgers, logs and corpus copies, `probe` runs `claude`, and `otel-sink` listens on a local port.
 
 When you run it through the skill, Claude reads the report. So the report goes wherever your Claude conversation goes.
 
 ## Supported version
 
-The latest release.
+The latest release. A security fix ships as a new release; users who pin an older tag must move to it.

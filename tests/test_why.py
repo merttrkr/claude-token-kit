@@ -609,3 +609,123 @@ def test_until_does_not_work_with_a_ready_ledger(tmp_path: Path) -> None:
     db = tmp_path / "l.sqlite"
     create(db).close()
     assert main(["why", "--db", str(db), "--until", "2026-10-01"]) == 2
+
+
+def test_earlier_runs_show_as_a_trend(conn: sqlite3.Connection) -> None:
+    now: dict[str, Any] = {}
+    why.render(conn, 30, LOW, out=now)
+    assert set(now) == {"end", "days", "fixed_per_request", "cut_share", "angles"}
+    old = {**now, "end": "2026-09-03T10:00:00.000Z", "fixed_per_request": 900}
+    last = {**now, "end": "2026-09-24T10:00:00.000Z", "cut_share": 0.5}
+    text = why.render(conn, 30, LOW, history=[old, last])
+    trend = text.split("## Trend", 1)[1].split("## Summary", 1)[0]
+    assert "| | 2026-09-03 (1 days) | 2026-09-24 (1 days) | now (1 days) |" in trend
+    assert "| fixed part per request | 900 |" in trend
+    assert "| cuttable waste (share of cost) | " in trend and "| 50% |" in trend
+
+
+def test_no_history_no_trend(conn: sqlite3.Connection) -> None:
+    assert "## Trend" not in why.render(conn, 30, LOW)
+
+
+def test_each_run_adds_its_numbers_to_the_history(tmp_path: Path) -> None:
+    from tokenlab.cli import main
+
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [at(assistant(0, "req_0", SONNET, content=[], input_tokens=10), 1)],
+    )
+    hist = tmp_path / "h.jsonl"
+    args = ["why", "--root", str(root), "--history", str(hist)]
+    assert (
+        main([*args, "--agents-dir", str(tmp_path), "--skills-dir", str(tmp_path)]) == 0
+    )
+    # Under two days of history there is no earlier point to measure.
+    assert len(hist.read_text(encoding="utf-8").splitlines()) == 1
+    assert (
+        main([*args, "--agents-dir", str(tmp_path), "--skills-dir", str(tmp_path)]) == 0
+    )
+    assert len(hist.read_text(encoding="utf-8").splitlines()) == 2
+    assert str(tmp_path) not in hist.read_text(encoding="utf-8")  # numbers only
+    other = tmp_path / "none.jsonl"
+    main(["why", "--root", str(root), "--history", str(other), "--no-history"])
+    assert not other.exists()
+
+
+def test_the_first_run_measures_an_earlier_point_once(tmp_path: Path) -> None:
+    from tokenlab.cli import main
+
+    root = tmp_path / "corpus"
+    days = [
+        {
+            **assistant(0, f"req_{d}", SONNET, content=[], input_tokens=10),
+            "timestamp": f"2026-10-{d:02d}T10:00:00.000Z",
+        }
+        for d in (1, 5, 9)
+    ]
+    write_jsonl(root / PROJECT / f"{MAIN}.jsonl", days)
+    hist = tmp_path / "h.jsonl"
+    common = ["--agents-dir", str(tmp_path), "--skills-dir", str(tmp_path)]
+    assert main(["why", "--root", str(root), "--history", str(hist), *common]) == 0
+    runs = [json.loads(x) for x in hist.read_text(encoding="utf-8").splitlines()]
+    # Halfway through eight days: the baseline ends on the 5th.
+    assert [r["end"][:10] for r in runs] == ["2026-10-05", "2026-10-09"]
+
+
+def test_a_damaged_history_is_skipped_not_fatal(
+    conn: sqlite3.Connection, tmp_path: Path
+) -> None:
+    from tokenlab.cli import MAX_RUNS, load_history, save_history
+
+    hist = tmp_path / "h.jsonl"
+    good = {
+        "end": "2026-09-01T10:00:00",
+        "fixed_per_request": 1,
+        "cut_share": 0.1,
+        "angles": {"R": 0.1},
+        "days": 3,
+    }
+    lines = [good, {**good, "angles": None}, {**good, "cut_share": "x"}]
+    hist.write_text(
+        "".join(json.dumps(h) + "\n" for h in lines) + '{"end": "2026-09-02',
+        encoding="utf-8",
+    )
+    save_history(hist, [{**good, "end": "2026-09-03T10:00:00.000Z"}])
+    got = load_history(hist)
+    # A naive and a Z time sort together; the half line did not eat the new one.
+    assert [h["end"][:10] for h in got] == ["2026-09-01", "2026-09-03"]
+    assert "## Trend" in why.render(conn, 30, LOW, history=got)
+    save_history(hist, [good] * (MAX_RUNS + 5))
+    assert len(hist.read_text(encoding="utf-8").splitlines()) == MAX_RUNS
+
+
+def test_a_time_with_an_offset_is_read_as_utc() -> None:
+    assert (
+        why.when("2026-10-01T13:00:00+03:00").isoformat() == "2026-10-01T10:00:00+00:00"
+    )
+    assert why.when("2026-10-01T10:00:00").isoformat() == "2026-10-01T10:00:00+00:00"
+
+
+def test_implausible_or_foreign_history_lines_are_skipped(tmp_path: Path) -> None:
+    from tokenlab.cli import load_history
+
+    good = {
+        "end": "2026-09-01T10:00:00Z",
+        "fixed_per_request": 1,
+        "cut_share": 0.1,
+        "angles": {"R": 0.1},
+        "days": 3,
+        "root": "abc",
+    }
+    bad = [
+        {**good, "cut_share": True},
+        {**good, "cut_share": 1.5},
+        {**good, "fixed_per_request": -1},
+        {**good, "angles": {"R": float("nan")}},
+        {**good, "root": "other"},
+    ]
+    hist = tmp_path / "h.jsonl"
+    lines = [json.dumps(h) for h in [good, *bad]]
+    hist.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    assert len(load_history(hist, "abc")) == 1

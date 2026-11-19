@@ -20,7 +20,7 @@ Each finding shows what it cost, the evidence, and a one-sentence fix.
 
 ## Safety
 
-- **The report is read-only.** It changes no setting and no file. `/token-lab:optimize` changes a file only after you see the diff and say yes. The report reads:
+- **The report is read-only.** It changes no setting and none of your files. Its one write is its own history, `~/.claude/token-lab/history.jsonl`: a line of numbers per run (no names, paths or text) for the trend at the top of the next report. Turn it off with `--no-history`; delete the file to forget it. `/token-lab:optimize` changes a file only after you see the diff and say yes. The report reads:
   - the logs under `~/.claude/projects`
   - `~/.claude/agents` and `~/.claude/skills`
   - the memory indexes (`MEMORY.md`) named in the logs
@@ -35,13 +35,13 @@ Easiest: give Claude Code the link to this page and say **"install this"**. Or o
 Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.ps1 | iex
+irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.ps1 | iex
 ```
 
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.sh | sh
 ```
 
 [`install.ps1`](install.ps1) and [`install.sh`](install.sh) only do this: check that Claude Code is installed, install `uv` if missing (`winget` on Windows, uv's own installer on macOS/Linux), then add and install this plugin, and turn on auto-update for it (the same switch as `/plugin` → Marketplaces → token-kit) unless you turned it off before. It touches no other setting; it is short, so you can read it.
@@ -51,7 +51,7 @@ Then restart Claude Code and type `/token-lab:token-lab`.
 **Updates:** with auto-update on, Claude Code fetches a new version by itself within a few minutes of a session's start and says "Plugin updated · Run /reload-plugins". To update now, run the install command again. To turn auto-update off: `/plugin` → Marketplaces → token-kit.
 
 > **Install steps for Claude** (if the user asked you to install this repo):
-> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.sh | sh`
+> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.sh | sh`
 > 2. If the output has no "Installed", tell the user the error exactly as printed and stop.
 > 3. Tell the user: "Installed. Type `/reload-plugins` in this session or restart Claude, then type `/token-lab:token-lab`."
 > 4. Change no setting other than the install.
@@ -86,6 +86,8 @@ The report is in English. `/token-lab:token-lab` has Claude summarize it in your
 - **Section 5:** agent work. Which repeated work could move to a named agent, which agent is unused.
 
 How far back can the report look? Claude Code deletes old logs based on the `cleanupPeriodDays` setting (default 30 days). That setting is yours.
+
+**Progress:** from the second run on, a **Trend** table at the top compares the fixed part per request, the cuttable waste and each angle's share of cost with the last run and with a run about a month earlier. The first run also measures an earlier point once (two weeks back, or halfway through a shorter history; nothing under two days), so the trend shows from day one; it takes a little longer.
 
 **Did a change help?** `uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why --until 2026-11-10` builds the report from the transcripts up to the start of that day (UTC); files on disk (memory, agents, skills) are read as they are now. Compare its Summary with today's; or ask Claude in `/token-lab:token-lab` to compare before and after a date.
 
@@ -125,7 +127,7 @@ claude plugin uninstall token-lab@token-kit
 claude plugin marketplace remove token-kit
 ```
 
-The report itself writes nothing. What stays is `uv` and its cache (Python and packages); remove them with `uv cache clean` if you want.
+What stays: the report's history, `~/.claude/token-lab/history.jsonl` (delete the `~/.claude/token-lab` folder), and `uv` with its cache (Python and packages; remove them with `uv cache clean` if you want).
 
 ## Development
 

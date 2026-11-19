@@ -2,6 +2,12 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.2.4 — 2026-11-19
+
+- A **Trend** table at the top of the report: the fixed part per request, the cuttable waste and each angle's share of cost, against the last run and a run about a month back.
+- PRINCIPLES.md: how the project is built and moved forward, each principle with its check; a repo CLAUDE.md, a PR template and a decision-note template (`docs/decisions/`).
+- The numbers come from `~/.claude/token-lab/history.jsonl`, one line per run (numbers only); `--no-history` turns it off. The first run also measures two weeks back once, so the trend shows from day one.
+
 ## 0.2.3 — 2026-11-19
 
 - README: the privacy note says plainly that Claude reads the report like any file in the session.

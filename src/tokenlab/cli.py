@@ -1,10 +1,15 @@
 import argparse
+import hashlib
+import importlib.metadata
+import json
+import math
 import sqlite3
 import sys
 import tempfile
 import time
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from typing import Any
 
 from tokenlab import (
     agents,
@@ -55,6 +60,95 @@ def prune_inventories(tmp: Path, now: float) -> None:
             d.rmdir()  # fails, and keeps the folder, if anything new is in it
         except OSError:
             continue
+
+
+HISTORY = Path.home() / ".claude" / "token-lab" / "history.jsonl"
+VERSION = importlib.metadata.version("tokenlab")
+SEED_DAYS = 14  # the first run also measures this far back, for a trend
+MAX_RUNS = 400  # history lines kept; older ones are dropped
+
+
+def seed_cutoff(conn: sqlite3.Connection) -> str | None:
+    """Where the first run's baseline ends: two weeks back, or halfway through a
+    shorter history; None under two days of history."""
+    first, last = conn.execute(
+        "SELECT MIN(ts_first), MAX(ts_first) FROM requests"
+    ).fetchone()
+    if not first:
+        return None
+    lo, hi = why.when(first), why.when(last)
+    if hi - lo < timedelta(days=2):
+        return None
+    back = max(hi - timedelta(days=SEED_DAYS), lo + (hi - lo) / 2)
+    return back.strftime("%Y-%m-%dT%H:%M:%S.000Z")
+
+
+def _number(v: object, lo: float, hi: float) -> bool:
+    """A finite number in [lo, hi]; JSON booleans are not numbers here."""
+    return (
+        isinstance(v, int | float)
+        and not isinstance(v, bool)
+        and math.isfinite(v)
+        and lo <= v <= hi
+    )
+
+
+def history_root(root: Path) -> str:
+    """Which transcripts a run measured, without naming them: runs over another
+    folder are not compared."""
+    return hashlib.sha256(str(root.resolve()).encode()).hexdigest()[:12]
+
+
+def load_history(path: Path, root: str = "") -> list[dict[str, Any]]:
+    """Earlier runs' numbers for the same transcripts, oldest first; damaged
+    or implausible lines are skipped."""
+    out: list[dict[str, Any]] = []
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return out
+    for line in lines:
+        try:
+            h = json.loads(line)
+            why.when(h["end"])
+            ok = (
+                _number(h["fixed_per_request"], 0, float("inf"))
+                and _number(h["cut_share"], 0, 1)
+                and isinstance(h["angles"], dict)
+                and all(_number(v, 0, 1) for v in h["angles"].values())
+                and _number(h.get("days", 1), 1, 3650)
+                and h.get("root", root) == root
+            )
+        except (ValueError, TypeError, KeyError, AttributeError):
+            continue
+        if ok:
+            out.append(h)
+    return sorted(out, key=lambda h: why.when(h["end"]))
+
+
+def save_history(path: Path, runs: list[dict[str, Any]]) -> None:
+    """Append runs' numbers; a report never fails because of its history."""
+    if not runs:
+        return
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        cut = (
+            path.exists()
+            and path.stat().st_size
+            and not path.read_bytes().endswith(b"\n")
+        )
+        with path.open("a", encoding="utf-8") as fh:
+            if cut:
+                fh.write("\n")  # a half-written last line stays alone and is skipped
+            for h in runs:
+                fh.write(json.dumps(h, sort_keys=True) + "\n")
+        lines = path.read_text(encoding="utf-8").splitlines(keepends=True)
+        if len(lines) > MAX_RUNS:
+            tmp = path.with_suffix(".tmp")
+            tmp.write_text("".join(lines[-MAX_RUNS:]), encoding="utf-8")
+            tmp.replace(path)
+    except OSError:
+        pass
 
 
 def default_root() -> Path:
@@ -113,6 +207,17 @@ def main(argv: list[str] | None = None) -> int:
         "--db", type=Path, default=None, help="use this ledger instead of --root"
     )
     p_why.add_argument("--days", type=int, default=30)
+    p_why.add_argument(
+        "--history",
+        type=Path,
+        default=HISTORY,
+        help="where the numbers of each run are kept for the trend (numbers only)",
+    )
+    p_why.add_argument(
+        "--no-history",
+        action="store_true",
+        help="do not read or write the history",
+    )
     p_why.add_argument(
         "--until",
         default=None,
@@ -221,9 +326,18 @@ def main(argv: list[str] | None = None) -> int:
         catalog = agents.load_catalog(args.agents_dir)
         refs = agents.skill_refs(args.skills_dir, sorted(catalog))
 
+        keep = not args.no_history and not args.until and args.db is None
+        here = history_root(args.root)
+        history = load_history(args.history, here) if keep else []
+        new: list[dict[str, Any]] = []
+
         def full_report(conn: sqlite3.Connection) -> str:
+            now: dict[str, Any] = {}
+            text = why.render(conn, args.days, r, catalog, history=history, out=now)
+            if now:
+                new.append({**now, "root": here, "version": VERSION})
             return (
-                why.render(conn, args.days, r, catalog)
+                text
                 + "\n## 5. Agent work (detail)\n\n"
                 + agents.render(conn, catalog, refs, args.days, r).split("\n", 1)[1]
             )
@@ -241,10 +355,27 @@ def main(argv: list[str] | None = None) -> int:
             db = Path(tmp) / "ledger.sqlite"
             ingest(args.root, db, args.until)
             conn = ledger.open_ledger(db)
+            back = seed_cutoff(conn) if keep and not history else None
+            if back:
+                # First run: measure an earlier point once, so a trend shows today.
+                seed_db = Path(tmp) / "seed.sqlite"
+                ingest(args.root, seed_db, back)
+                seed_conn = ledger.open_ledger(seed_db)
+                try:
+                    seed: dict[str, Any] = {}
+                    why.render(seed_conn, args.days, r, catalog, out=seed)
+                finally:
+                    seed_conn.close()
+                if seed:
+                    seed = {**seed, "root": here, "version": VERSION}
+                    history.append(seed)
+                    new.append(seed)
             try:
                 sys.stdout.write(full_report(conn))
             finally:
                 conn.close()
+        if keep:
+            save_history(args.history, new)
         return 0
     if args.command == "inventory":
         if not args.root.is_dir():

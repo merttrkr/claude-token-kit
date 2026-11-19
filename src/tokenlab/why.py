@@ -15,9 +15,10 @@ import sqlite3
 from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from statistics import median
+from typing import Any
 
 from tokenlab import reconcile
 from tokenlab.agents import (
@@ -228,16 +229,10 @@ def _health(conn: sqlite3.Connection) -> tuple[str, str]:
             f" does not know ({_names(sorted(unknown), 5)}; usually harmless)"
         )
     warn = ""
-    if count["unknown"] / records > 0.01:
+    if (lost + count["unknown"]) / records > 0.01:
         warn = (
-            f"**Warning: {_share(count['unknown'], records)} of the records are of"
-            " types this version does not know; if Claude Code changed its format,"
-            " the numbers may be low. Update token-lab; if this stays, open an"
-            " issue.**"
-        )
-    if lost / records > 0.01:
-        warn = (
-            f"**Warning: {_share(lost, records)} of the records could not be read;"
+            f"**Warning: {_share(lost + count['unknown'], records)} of the records"
+            " could not be read or are of types this version does not know;"
             " the numbers may be low. Update token-lab; if this stays, open an"
             " issue.**"
         )
@@ -264,12 +259,76 @@ def _coverage(conn: sqlite3.Connection, start: str, end: str) -> str:
     return (
         "- Claude Code's own cost counter (`cost-state`,"
         f" {_n(procs, 'process', 'processes')}):"
-        f" the transcripts hold {_share(held, counted)} of its cost. The rest never"
-        " reached a transcript (background requests such as titles and suggestions,"
-        " compaction; the split is not measured). Measured over whole processes"
-        " that overlap the window, so the report's totals are likely low by"
-        " about that share."
+        f" the transcripts hold {_share(held, counted)} of its cost. The rest is in"
+        " no transcript; on Claude Code 2.1.318, checked against OpenTelemetry, it"
+        " was background requests (titles, suggestions, hook prompts) and"
+        " compaction, while every request the transcripts hold matched. Not"
+        " re-measured on later versions. Measured over whole processes that"
+        " overlap the window, so the report's totals are likely low by about"
+        " that share."
     )
+
+
+TREND_BACK_DAYS = 28  # the oldest column: the run closest to this far back
+
+
+def _trend(history: list[dict[str, Any]], now: dict[str, Any]) -> list[str]:
+    """A table of earlier runs against this one: the earlier run closest to
+    four weeks back, the last run, and now. Numbers only."""
+    if not history:
+        return []
+    end = when(now["end"])
+
+    def age(h: dict[str, Any]) -> float:
+        return (end - when(h["end"])).total_seconds() / 86400
+
+    # One run per end time (a rerun on the same data adds nothing), oldest first.
+    past = sorted(
+        {when(h["end"]): h for h in history if age(h) > 0}.items(), key=lambda kv: kv[0]
+    )
+    if not past:
+        return []
+    last = past[-1][1]
+    cols = [last]
+    if past[:-1]:
+        old = min(
+            (h for _, h in past[:-1]), key=lambda h: abs(age(h) - TREND_BACK_DAYS)
+        )
+        cols = [old, last]
+
+    def label(h: dict[str, Any], name: str) -> str:
+        return f"{name} ({h['days']} days)" if "days" in h else name
+
+    names = [label(h, str(h["end"])[:10]) for h in cols]
+    lines = [
+        "## Trend",
+        "",
+        "| | " + " | ".join(names) + f" | {label(now, 'now')} |",
+        "|---" * (len(cols) + 2) + "|",
+        "| fixed part per request | "
+        + " | ".join(_human(h["fixed_per_request"]) for h in [*cols, now])
+        + " |",
+        "| cuttable waste (share of cost) | "
+        + " | ".join(_share(h["cut_share"], 1) for h in [*cols, now])
+        + " |",
+    ]
+    for code, angle in ANGLE.items():
+        got = [h["angles"].get(code, 0.0) for h in [*cols, now]]
+        if any(got):
+            lines.append(f"| {angle} | " + " | ".join(_share(g, 1) for g in got) + " |")
+    if len({h.get("days") for h in [*cols, now]}) > 1:
+        lines += [
+            "",
+            "Shares of cost compare runs fairly; a shorter window (days in brackets)"
+            " can still differ by chance.",
+        ]
+    return [*lines, ""]
+
+
+def when(iso: str) -> datetime:
+    """An ISO time as an aware UTC datetime, with or without `Z` or an offset."""
+    got = datetime.fromisoformat(iso.replace("Z", "+00:00"))
+    return got.astimezone(UTC) if got.tzinfo else got.replace(tzinfo=UTC)
 
 
 def _share(part: float, whole: float) -> str:
@@ -283,7 +342,12 @@ def render(
     days: int = 30,
     rules: Rules = DEFAULT,
     catalog: dict[str, AgentDef] | None = None,
+    *,
+    history: list[dict[str, Any]] | None = None,
+    out: dict[str, Any] | None = None,
 ) -> str:
+    """The report. `history`: earlier runs' numbers, shown as a trend; `out`, if
+    given, receives this run's numbers (no names or paths) for the history."""
     win = _window(conn, days)
     if win is None:
         return "No Claude Code requests yet: try again after a few sessions.\n"
@@ -926,6 +990,19 @@ def render(
 
     cut = sum(f.cost for f in waste)
     warn, health = _health(conn)
+    numbers: dict[str, Any] = {
+        "end": end,
+        "days": int(span),
+        "fixed_per_request": int(per_request),
+        "cut_share": round(cut / paid_week, 4) if paid_week else 0.0,
+        "angles": {
+            code: round(share / paid_week, 4)
+            for share, _, _, _, code in rows
+            if share and paid_week
+        },
+    }
+    if out is not None:
+        out.update(numbers)
     lines = [
         f"# Token map — last {int(span)} days ({start[:10]} → {end[:10]})",
         "",
@@ -945,6 +1022,7 @@ def render(
         f" · {_n(n_req, 'request', 'requests')} · {_human(prompt)} tokens"
         f" went to Claude, {_human(output)} tokens came back.",
         "",
+        *_trend(history or [], numbers),
         "## Summary",
         "",
         "| angle | what was found | share of cost | what to do |",

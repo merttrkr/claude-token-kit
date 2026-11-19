@@ -23,6 +23,20 @@ def _no_network(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     yield
 
 
+# CLI defaults point into the user's home (transcripts, agents, skills, history):
+# tests see an empty home instead, so a missing argument never reads or writes it.
+@pytest.fixture(autouse=True)
+def _no_home_history(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    from tokenlab import cli
+
+    home = tmp_path / "home"
+    monkeypatch.setattr(Path, "home", lambda: home)
+    monkeypatch.setattr(cli, "PROJECTS", home / ".claude" / "projects")
+    monkeypatch.setattr(
+        cli, "HISTORY", home / ".claude" / "token-lab" / "history.jsonl"
+    )
+
+
 def ts(second: int) -> str:
     return f"2026-10-01T10:00:{second:02d}.000Z"
 

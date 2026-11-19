@@ -22,6 +22,7 @@ uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab why [--rules ~/.claude/token-lab.tom
   - Windows: `winget install astral-sh.uv`
   - macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
 - The report only reads: the transcripts under `~/.claude/projects`, `~/.claude/agents`, `~/.claude/skills` and the `MEMORY.md` files the transcripts name. On a long history it takes about a minute.
+- The report keeps one line of numbers per run in `~/.claude/token-lab/history.jsonl` for its trend (no names, paths or text); add `--no-history` if the user does not want it.
 - The report makes no network calls; only the first run lets `uvx` install the package and, if needed, download Python.
 - Do not paste the whole output into the chat; read it and summarise.
 - If the user asks whether a change helped, run the report twice: with `--until <YYYY-MM-DD>` (the day of the change; transcripts up to then, files on disk as they are now) and without. Compare the two Summary tables angle by angle and the two bold sentences at the top.
@@ -30,7 +31,7 @@ uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab why [--rules ~/.claude/token-lab.tom
 
 For someone who is not technical. The report's "Summary" and "First step" sections are written for this:
 
-1. Say the two bold sentences at the top of the report, with their numbers. If a bold "Warning:" line follows them, say it first: some records could not be read and the numbers may be low.
+1. Say the two bold sentences at the top of the report, with their numbers. If a "Trend" table follows, say in one sentence what changed since the last run and since about a month ago (fixed part per request, cuttable waste). If a bold "Warning:" line follows them, say it first: some records could not be read and the numbers may be low.
 2. One line per angle of the "Summary" table, in the table's order: what was found, its share of cost, what to do. Group the "no issue" angles into one line at the end. Explain a technical term in one word (e.g. cache, context).
 3. In the Agents line, say the general-purpose share (and the trend of the last days, if shown). From the "Agent candidates" table at the end of section 2, name the jobs whose verdict is "agent candidate" and where they run (main session or general-purpose). From section 5: name the largest new candidate in "Recurring generic jobs", the largest job an existing agent missed in "Generic calls an existing agent covers", and any verdict other than "keep" in "Existing agents" (e.g. retire, merge, check grants, tighten contract).
 4. The Cache and Hooks lines are observations; do not promise a sure saving.

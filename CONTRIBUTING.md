@@ -1,5 +1,7 @@
 # Contributing
 
+Read [PRINCIPLES.md](PRINCIPLES.md) first: every change is checked against it.
+
 ## Setup and checks
 
 ```
@@ -43,7 +45,7 @@ Installers: `install.ps1` (Windows) and `install.sh` (macOS, Linux). Both embed 
 
 Supported user commands are `why` and `inventory`. The other commands (ingest, reconcile, report, agents, episodes, simulate, probe, budget, otel-sink, snapshot, ...) are research tools used by a private lab. They stay as they are, but are not supported for users.
 
-`tokenlab ingest` writes a permanent ledger. It holds file paths, shell commands and URLs from tool calls (up to 500 characters). Treat it like the transcripts. `why` and `inventory` use a temporary ledger that is deleted after the run.
+`tokenlab ingest` writes a permanent ledger. It holds file paths, shell commands and URLs from tool calls (up to 500 characters). Treat it like the transcripts. `why` and `inventory` use a temporary ledger that is deleted after the run. `why` keeps one line of numbers per run in `~/.claude/token-lab/history.jsonl` for its trend table (no names, paths or text; tests redirect it in `tests/conftest.py`).
 
 ## Key decisions
 

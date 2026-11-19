@@ -119,3 +119,19 @@ def test_auto_update_gives_up_on_a_held_lock(tmp_path: Path) -> None:
     assert out == "off"
     assert seconds < 6 + 5  # the script waits about 5 s; the rest is interpreter start
     assert known.read_text(encoding="utf-8") == text
+
+
+def test_every_check_named_in_principles_exists() -> None:
+    """A principle is only applied if its check exists: a renamed or deleted test
+    must update PRINCIPLES.md too."""
+    text = (ROOT / "PRINCIPLES.md").read_text(encoding="utf-8")
+    named = re.findall(r"`(tests/[\w/]+\.py)::(\w+)`", text)
+    named += [
+        (f, n)
+        for f, rest in re.findall(r"`(tests/[\w/]+\.py)::\w+`((?:, `\w+`)+)", text)
+        for n in re.findall(r"`(\w+)`", rest)
+    ]
+    assert named
+    for file, name in named:
+        source = (ROOT / file).read_text(encoding="utf-8")
+        assert re.search(rf"^def {name}\(", source, re.M), f"{file}::{name}"
