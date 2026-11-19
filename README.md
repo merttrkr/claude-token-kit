@@ -24,7 +24,7 @@ Each finding shows what it cost, the evidence, and a one-sentence fix.
   - the logs under `~/.claude/projects`
   - `~/.claude/agents` and `~/.claude/skills`
   - the memory indexes (`MEMORY.md`) named in the logs
-- **Sends nothing.** The report never leaves your machine. Only the first run installs the `uv` package and, if needed, downloads Python.
+- **The tool sends nothing.** It makes no network calls; only the first run installs the `uv` package and, if needed, downloads Python. When you run it through `/token-lab:token-lab` or `/token-lab:optimize`, Claude reads the report (and, in optimize, the files under review) like any file in your session, so it goes wherever your Claude conversation goes.
 - **Leaves nothing running.** No hook, no background program, no scheduled task.
 - If you want to apply a finding, tell Claude; it shows the file and the diff and applies it only after you say yes.
 
@@ -35,13 +35,13 @@ Easiest: give Claude Code the link to this page and say **"install this"**. Or o
 Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.ps1 | iex
 ```
 
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.sh | sh
 ```
 
 [`install.ps1`](install.ps1) and [`install.sh`](install.sh) only do this: check that Claude Code is installed, install `uv` if missing (`winget` on Windows, uv's own installer on macOS/Linux), then add and install this plugin, and turn on auto-update for it (the same switch as `/plugin` → Marketplaces → token-kit) unless you turned it off before. It touches no other setting; it is short, so you can read it.
@@ -51,7 +51,7 @@ Then restart Claude Code and type `/token-lab:token-lab`.
 **Updates:** with auto-update on, Claude Code fetches a new version by itself within a few minutes of a session's start and says "Plugin updated · Run /reload-plugins". To update now, run the install command again. To turn auto-update off: `/plugin` → Marketplaces → token-kit.
 
 > **Install steps for Claude** (if the user asked you to install this repo):
-> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh`
+> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.sh | sh`
 > 2. If the output has no "Installed", tell the user the error exactly as printed and stop.
 > 3. Tell the user: "Installed. Type `/reload-plugins` in this session or restart Claude, then type `/token-lab:token-lab`."
 > 4. Change no setting other than the install.
@@ -86,6 +86,8 @@ The report is in English. `/token-lab:token-lab` has Claude summarize it in your
 - **Section 5:** agent work. Which repeated work could move to a named agent, which agent is unused.
 
 How far back can the report look? Claude Code deletes old logs based on the `cleanupPeriodDays` setting (default 30 days). That setting is yours.
+
+**Did a change help?** `uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why --until 2026-11-10` builds the report from the transcripts up to the start of that day (UTC); files on disk (memory, agents, skills) are read as they are now. Compare its Summary with today's; or ask Claude in `/token-lab:token-lab` to compare before and after a date.
 
 ## Full optimization: `/token-lab:optimize`
 
@@ -132,3 +134,5 @@ uv sync
 uv run pytest -q
 uv run ruff check . && uv run mypy src
 ```
+
+Supported commands are `why` and `inventory`; the others are research tools, kept but not supported. See [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md) and [SECURITY.md](SECURITY.md).

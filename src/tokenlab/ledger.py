@@ -143,6 +143,13 @@ CREATE TABLE otel_requests (
     ttft_ms INTEGER NOT NULL,
     PRIMARY KEY (session_id, ts, seq)
 );
+-- What ingest could not read; outside the digest (a count, not evidence).
+CREATE TABLE health (
+    what TEXT NOT NULL,              -- records, broken, no_usage, unknown
+    name TEXT NOT NULL,              -- the unknown record type, else ''
+    n INTEGER NOT NULL,
+    PRIMARY KEY (what, name)
+);
 """
 
 TABLE_ORDER = {

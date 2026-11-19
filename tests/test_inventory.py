@@ -290,3 +290,37 @@ def test_an_empty_ledger_says_so(tmp_path: Path) -> None:
         create(tmp_path / "e.sqlite"), tmp_path, tmp_path, tmp_path, tmp_path
     )
     assert "No Claude Code requests yet" in text and pieces == ""
+
+
+def test_old_inventory_folders_are_pruned_and_nothing_else(tmp_path: Path) -> None:
+    from tokenlab.cli import STALE_INVENTORY_S, prune_inventories
+
+    def folder(name: str, files: list[str], age: float) -> Path:
+        d = tmp_path / name
+        d.mkdir()
+        for f in files:
+            (d / f).write_text("x", encoding="utf-8")
+        os.utime(d, (1e9 - age, 1e9 - age))
+        return d
+
+    old = folder(
+        "token-lab-old", ["inventory.md", "system-prompt.md"], STALE_INVENTORY_S + 1
+    )
+    fresh = folder("token-lab-new", ["inventory.md"], 60)
+    foreign = folder(
+        "token-lab-mine", ["inventory.md", "notes.txt"], STALE_INVENTORY_S + 1
+    )
+    other = folder("other-old", ["inventory.md"], STALE_INVENTORY_S + 1)
+    prune_inventories(tmp_path, 1e9)
+    assert not old.exists()
+    assert fresh.exists() and foreign.exists() and other.exists()
+
+
+def test_a_folder_with_a_subfolder_is_not_pruned(tmp_path: Path) -> None:
+    from tokenlab.cli import STALE_INVENTORY_S, prune_inventories
+
+    d = tmp_path / "token-lab-x"
+    (d / "inventory.md").mkdir(parents=True)  # our name, but a folder
+    os.utime(d, (1e9 - STALE_INVENTORY_S - 1, 1e9 - STALE_INVENTORY_S - 1))
+    prune_inventories(tmp_path, 1e9)
+    assert (d / "inventory.md").is_dir()

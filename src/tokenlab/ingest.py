@@ -7,6 +7,7 @@ import hashlib
 import json
 import re
 import sqlite3
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -31,6 +32,40 @@ TARGET_MAX = 500
 # System records that mark a model request the transcript does not show as an
 # assistant message.
 EVENT_SUBTYPES = frozenset({"compact_boundary", "away_summary"})
+# Record types seen in Claude Code transcripts (2.1.3xx). Those not read here
+# carry no tokens; a type outside this set is counted, so a format change shows
+# up in the report instead of silently lowering its numbers.
+KNOWN_TYPES = frozenset(
+    {
+        "assistant",
+        "user",
+        "attachment",
+        "system",
+        "api-request-shape",
+        "cost-state",
+        "api-request",
+        "api-request-blob",
+        "last-prompt",
+        "atis-latch",
+        "mode",
+        "ai-title",
+        "session-owner",
+        "queue-operation",
+        "permission-mode",
+        "agent-name",
+        "custom-title",
+        "summary",
+        "file-history-snapshot",
+        "file-history-delta",
+        "tools-used",
+        "bridge-session",
+        "agent-setting",
+        "artifact-autoreact-ledger",
+        "artifact-comment-monitor",
+        "frame-link",
+        "fork-context-ref",
+    }
+)
 # How a user-role record that is not a tool result is classified. Its text is read
 # here and never stored.
 INTERRUPT = "[Request interrupted by user"
@@ -248,6 +283,9 @@ class Ingest:
     )
     shapes_by_agent: dict[str, set[str]] = field(default_factory=dict)
     agent_threads: set[str] = field(default_factory=set)
+    # Read only records before this time (ISO text; a date means its start).
+    until: str | None = None
+    health: Counter[tuple[str, str]] = field(default_factory=Counter)
 
     def run(self) -> None:
         projects = (
@@ -274,6 +312,10 @@ class Ingest:
                     self._thread_row(thread, "subagent", meta)
                     self._read(thread, is_main=False)
         self._write_cost_states()
+        self.conn.executemany(
+            "INSERT INTO health VALUES (?,?,?)",
+            sorted((what, name, n) for (what, name), n in self.health.items()),
+        )
         otel.load(self.conn, self.root)
         self.conn.commit()
 
@@ -296,15 +338,23 @@ class Ingest:
         )
 
     def _read(self, t: Thread, *, is_main: bool) -> None:
+        cut = False  # a broken line counts only when another follows it
         with t.path.open("rb") as fh:
             for line in fh:
+                if cut:
+                    self.health[("broken", "")] += 1
+                    cut = False
                 try:
                     rec = json.loads(line)
                 except json.JSONDecodeError:
-                    continue  # a line cut off by a snapshot taken mid-write
+                    cut = True  # the last line may be cut off mid-write
+                    continue
                 if not isinstance(rec, dict):
                     continue
                 ts = rec.get("timestamp")
+                if self.until and isinstance(ts, str) and ts > self.until:
+                    break  # lines are in time order
+                self.health[("records", "")] += 1
                 if isinstance(ts, str) and ts > t.last_ts:
                     t.last_ts = ts
                 kind = rec.get("type")
@@ -346,6 +396,8 @@ class Ingest:
                 elif kind == "cost-state" and is_main:
                     key = (str(rec["sessionId"]), int(rec["startTime"]))
                     self.cost_states[key] = (rec, t.last_ts, t.project)
+                elif kind not in KNOWN_TYPES:
+                    self.health[("unknown", str(kind))] += 1
         self._write_requests(t)
 
     def _assistant(self, t: Thread, rec: dict[str, Any]) -> None:
@@ -549,6 +601,8 @@ class Ingest:
     def _write_requests(self, t: Thread) -> None:
         for req in t.requests.values():
             u = req.usage
+            if not any(u.values()):
+                self.health[("no_usage", "")] += 1  # no record carried usage
             cw = u.get("cache_creation_input_tokens", 0)
             w5, w1 = u.get("w5m", 0), u.get("w1h", 0)
             unsplit = max(0, cw - w5 - w1)
@@ -626,10 +680,10 @@ class Ingest:
                 )
 
 
-def ingest(root: Path, db: Path) -> str:
+def ingest(root: Path, db: Path, until: str | None = None) -> str:
     conn = ledger.create(db)
     try:
-        Ingest(conn, root).run()
+        Ingest(conn, root, until=until).run()
         return ledger.digest(conn)
     finally:
         conn.close()

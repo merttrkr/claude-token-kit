@@ -1,5 +1,5 @@
-# token-lab install (Windows). One command:
-#   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
+# token-lab install (Windows). One command (vX.Y.Z = the latest release tag, see README):
+#   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/vX.Y.Z/install.ps1 | iex
 # What it does: checks for claude, installs uv with winget if missing, adds and installs the plugin,
 # turns on auto-update for token-kit (the field the /plugin > Marketplaces toggle writes).
 # Updates what is already installed; touches no other setting.
@@ -38,6 +38,10 @@ if ($markets -match 'token-kit') {
 } else {
     claude plugin marketplace add $Repo | Out-Null
 }
+if ($LASTEXITCODE -ne 0) {  # Windows PowerShell does not stop on a native failure
+    Write-Host 'Could not add or update the token-kit marketplace; see the error above.' -ForegroundColor Red
+    return
+}
 
 $plugins = (claude plugin list 2>&1) -join "`n"
 if ($plugins -match 'token-lab@token-kit') {
@@ -46,9 +50,26 @@ if ($plugins -match 'token-lab@token-kit') {
 } else {
     claude plugin install token-lab@token-kit | Out-Null
 }
+if ($LASTEXITCODE -ne 0) {
+    Write-Host 'Could not install or update token-lab; see the error above.' -ForegroundColor Red
+    return
+}
 
 if (((claude plugin list 2>&1) -join "`n") -notmatch 'token-lab@token-kit') {
     Write-Host 'Install could not be verified: token-lab is not in claude plugin list.' -ForegroundColor Red
+    return
+}
+
+# An update that failed leaves the old version listed: compare with the marketplace.
+$ConfigDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
+$latest = $null; $installed = $null
+try {
+    $manifest = Join-Path $ConfigDir 'plugins/marketplaces/token-kit/.claude-plugin/marketplace.json'
+    $latest = ((Get-Content $manifest -Raw | ConvertFrom-Json).plugins | Where-Object { $_.name -eq 'token-lab' }).version
+    $installed = ((claude plugin list --json 2>$null | Out-String | ConvertFrom-Json) | Where-Object { $_.id -eq 'token-lab@token-kit' }).version
+} catch {}
+if ($latest -and $installed -and $latest -ne $installed) {
+    Write-Host "Update did not finish: version $installed is installed, $latest is the latest. Run: claude plugin update token-lab@token-kit" -ForegroundColor Red
     return
 }
 
@@ -82,7 +103,6 @@ try:
 except Exception:
     print("off")
 '@
-$ConfigDir = if ($env:CLAUDE_CONFIG_DIR) { $env:CLAUDE_CONFIG_DIR } else { Join-Path $HOME '.claude' }
 $Known = Join-Path $ConfigDir 'plugins\known_marketplaces.json'
 $auto = & {
     # Child scope: under irm | iex this script runs in the caller's session.

@@ -9,7 +9,7 @@
       "name": "token-lab",
       "source": "./",
       "description": "Finds where your tokens go and which should not be there; optimize applies changes only after your yes.",
-      "version": "0.2.2"
+      "version": "0.2.3"
     }
   ]
 }

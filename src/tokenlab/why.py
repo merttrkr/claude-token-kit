@@ -19,6 +19,7 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from statistics import median
 
+from tokenlab import reconcile
 from tokenlab.agents import (
     GENERIC,
     NO_TRACE,
@@ -198,6 +199,77 @@ def _human(n: float) -> str:
 def _n(count: int, one: str, many: str) -> str:
     """`1 tool was`, `3 tools were`: a count with the right English form."""
     return f"{count:,} {one if count == 1 else many}"
+
+
+def _health(conn: sqlite3.Connection) -> tuple[str, str]:
+    """(a warning for the top or "", a line for "Not visible") from what ingest
+    could not read. A ledger built before the health table gives ("", "")."""
+    try:
+        got = conn.execute("SELECT what, name, n FROM health").fetchall()
+    except sqlite3.OperationalError:
+        return "", ""
+    count: Counter[str] = Counter()
+    unknown: list[str] = []
+    for what, name, n in got:
+        count[what] += n
+        if what == "unknown":
+            unknown.append(name)
+    records, lost = count["records"], count["broken"] + count["no_usage"]
+    if not records:
+        return "", ""
+    line = (
+        f"- Records read: {records:,}. Skipped:"
+        f" {_n(count['broken'], 'cut-off line', 'cut-off lines')},"
+        f" {_n(count['no_usage'], 'answer', 'answers')} without token counts"
+    )
+    if unknown:
+        line += (
+            f", {_n(count['unknown'], 'record', 'records')} of types this version"
+            f" does not know ({_names(sorted(unknown), 5)}; usually harmless)"
+        )
+    warn = ""
+    if count["unknown"] / records > 0.01:
+        warn = (
+            f"**Warning: {_share(count['unknown'], records)} of the records are of"
+            " types this version does not know; if Claude Code changed its format,"
+            " the numbers may be low. Update token-lab; if this stays, open an"
+            " issue.**"
+        )
+    if lost / records > 0.01:
+        warn = (
+            f"**Warning: {_share(lost, records)} of the records could not be read;"
+            " the numbers may be low. Update token-lab; if this stays, open an"
+            " issue.**"
+        )
+    return warn, line + "."
+
+
+def _coverage(conn: sqlite3.Connection, start: str, end: str) -> str:
+    """How much of Claude Code's own cost counter the transcripts hold."""
+
+    def ms(iso: str) -> float:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp() * 1000
+
+    # Processes that overlap the window: started before its end, ran into it.
+    rs = [
+        r for r in reconcile.rows(conn) if r.start_time <= ms(end) and r.asof >= start
+    ]
+    _, _, held, counted = reconcile.totals(rs)
+    if not counted:
+        return (
+            "- Claude Code wrote no cost counter (`cost-state`) in this window, so"
+            " how much the transcripts miss was not checked."
+        )
+    procs = len({(r.session_id, r.start_time) for r in rs})
+    return (
+        "- Claude Code's own cost counter (`cost-state`,"
+        f" {_n(procs, 'process', 'processes')}):"
+        f" the transcripts hold {_share(held, counted)} of its cost. The rest never"
+        " reached a transcript (background requests such as titles and suggestions,"
+        " compaction; the split is not measured). Measured over whole processes"
+        " that overlap the window, so the report's totals are likely low by"
+        " about that share."
+    )
 
 
 def _share(part: float, whole: float) -> str:
@@ -853,6 +925,7 @@ def render(
         rows.append((share, angle, found or "no issue", todo or "-", code))
 
     cut = sum(f.cost for f in waste)
+    warn, health = _health(conn)
     lines = [
         f"# Token map — last {int(span)} days ({start[:10]} → {end[:10]})",
         "",
@@ -866,6 +939,7 @@ def render(
             if waste
             else "**No cuttable waste above the threshold.**"
         ),
+        *([warn] if warn else []),
         "",
         f"{_n(sessions, 'session', 'sessions')}"
         f" · {_n(n_req, 'request', 'requests')} · {_human(prompt)} tokens"
@@ -1012,6 +1086,8 @@ def render(
         "",
         "## 3. Not visible",
         "",
+        _coverage(conn, start, end),
+        *([health] if health else []),
         "- The session title, the compaction summary and suggestion requests are not"
         " written to the transcript; this report cannot see them.",
         "- What the tokens bought (was the job done, was the result right) is not in"

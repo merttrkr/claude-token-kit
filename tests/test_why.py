@@ -542,3 +542,70 @@ def test_an_agent_granted_only_another_tool_of_the_system_is_not_named(
     )
     found = [r for r in finding(text, "A") if "`tracker`" in r]
     assert found and "tracker-writer" not in found[0]
+
+
+def test_the_report_says_how_much_of_claude_codes_counter_it_holds(
+    mini_corpus: Path, tmp_path: Path
+) -> None:
+    db = tmp_path / "m.sqlite"
+    ingest(mini_corpus, db)
+    text = why.render(sqlite3.connect(db), 30, LOW)
+    line = next(r for r in text.splitlines() if "cost counter" in r)
+    # The title request is in Claude Code's counter but in no transcript.
+    assert "the transcripts hold" in line and "100%" not in line
+
+
+def test_records_it_cannot_read_are_counted_and_warned_about(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    records = [
+        at(assistant(0, f"req_{i}", SONNET, content=[], input_tokens=10), i)
+        for i in range(3)
+    ]
+    records.insert(1, at({"type": "brand-new-kind"}, 1))
+    # A cut-off line in the middle is broken; the same at the end is a live write.
+    write_jsonl(root / PROJECT / f"{MAIN}.jsonl", records, tail='{"type": "ass')
+    path = root / PROJECT / f"{MAIN}.jsonl"
+    lines = path.read_text().splitlines(keepends=True)
+    path.write_text("".join(lines[:2] + ['{"broken\n'] + lines[2:]))
+    db = tmp_path / "h.sqlite"
+    ingest(root, db)
+    text = why.render(sqlite3.connect(db), 30, LOW)
+    health = next(r for r in text.splitlines() if r.startswith("- Records read"))
+    assert "1 cut-off line," in health
+    assert "brand-new-kind" in health
+    assert "**Warning:" in text.split("## Summary", 1)[0]
+
+
+def test_until_builds_the_report_as_it_was_then(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            at(assistant(0, "req_0", SONNET, content=[], input_tokens=10), 1),
+            at(assistant(0, "req_1", SONNET, content=[], input_tokens=10), 30),
+        ],
+    )
+    db = tmp_path / "u.sqlite"
+    ingest(root, db, until="2026-10-01T10:15:00.000Z")
+    conn = sqlite3.connect(db)
+    assert conn.execute("SELECT COUNT(*) FROM requests").fetchone()[0] == 1
+
+
+def test_a_streamed_record_without_usage_is_not_a_lost_answer(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    partial = at(assistant(0, "req_0", SONNET, content=[], input_tokens=10), 1)
+    partial["message"] = {k: v for k, v in partial["message"].items() if k != "usage"}
+    full = at(assistant(0, "req_0", SONNET, content=[], input_tokens=10), 1)
+    write_jsonl(root / PROJECT / f"{MAIN}.jsonl", [partial, full])
+    db = tmp_path / "s.sqlite"
+    ingest(root, db)
+    got = sqlite3.connect(db).execute("SELECT n FROM health WHERE what = 'no_usage'")
+    assert got.fetchall() == []
+
+
+def test_until_does_not_work_with_a_ready_ledger(tmp_path: Path) -> None:
+    from tokenlab.cli import main
+
+    db = tmp_path / "l.sqlite"
+    create(db).close()
+    assert main(["why", "--db", str(db), "--until", "2026-10-01"]) == 2

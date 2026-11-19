@@ -2,6 +2,7 @@ import argparse
 import sqlite3
 import sys
 import tempfile
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -27,6 +28,33 @@ PROBE_LOG = Path("data/probes/probes.jsonl")
 # MCP servers connect asynchronously, so only an MCP-free config is deterministic.
 PROBE_BASELINE = "base-nomcp"
 PROJECTS = Path.home() / ".claude" / "projects"
+
+
+INVENTORY_FILES = frozenset({"inventory.md", "pieces.md", "system-prompt.md"})
+STALE_INVENTORY_S = 6 * 3600
+
+
+def prune_inventories(tmp: Path, now: float) -> None:
+    """Delete earlier inventory folders an interrupted optimize left behind: they
+    hold the system prompt and file paths. Only folders with our files and nothing
+    else, older than a few hours (another session may still be reading one)."""
+    for d in tmp.glob("token-lab-*"):
+        try:
+            files = list(d.iterdir())
+            if (
+                d.is_symlink()
+                or now - d.stat().st_mtime <= STALE_INVENTORY_S
+                or any(
+                    f.name not in INVENTORY_FILES or f.is_symlink() or not f.is_file()
+                    for f in files
+                )
+            ):
+                continue
+            for f in files:
+                f.unlink()
+            d.rmdir()  # fails, and keeps the folder, if anything new is in it
+        except OSError:
+            continue
 
 
 def default_root() -> Path:
@@ -85,6 +113,12 @@ def main(argv: list[str] | None = None) -> int:
         "--db", type=Path, default=None, help="use this ledger instead of --root"
     )
     p_why.add_argument("--days", type=int, default=30)
+    p_why.add_argument(
+        "--until",
+        default=None,
+        help="the report as it was at this UTC time (a date means its start),"
+        " to compare before and after a change",
+    )
     p_why.add_argument("--rules", type=Path, default=None)
     p_why.add_argument(
         "--agents-dir", type=Path, default=Path.home() / ".claude" / "agents"
@@ -195,6 +229,9 @@ def main(argv: list[str] | None = None) -> int:
             )
 
         if args.db is not None:
+            if args.until:
+                print("--until reads transcripts; it does not work with --db.")
+                return 2
             sys.stdout.write(full_report(ledger.open_ledger(args.db)))
             return 0
         if not args.root.is_dir():
@@ -202,7 +239,7 @@ def main(argv: list[str] | None = None) -> int:
             return 1
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "ledger.sqlite"
-            ingest(args.root, db)
+            ingest(args.root, db, args.until)
             conn = ledger.open_ledger(db)
             try:
                 sys.stdout.write(full_report(conn))
@@ -213,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
         if not args.root.is_dir():
             print(f"No transcript folder: {args.root}. Use Claude Code once.")
             return 1
+        if args.out is None:
+            prune_inventories(Path(tempfile.gettempdir()), time.time())
         out = args.out or Path(tempfile.mkdtemp(prefix="token-lab-"))
         out.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory() as tmp:

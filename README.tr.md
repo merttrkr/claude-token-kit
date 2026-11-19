@@ -24,7 +24,7 @@ Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü ya
   - `~/.claude/projects` altındaki kayıtlar
   - `~/.claude/agents` ve `~/.claude/skills`
   - kayıtlarda adı geçen hafıza index'leri (`MEMORY.md`)
-- **Bir şey göndermez.** Rapor ağa çıkmaz. Yalnızca ilk çalıştırmada `uv` paketi kurar; gerekirse Python'u da indirir.
+- **Araç bir şey göndermez.** Ağa çıkmaz; yalnızca ilk çalıştırmada `uv` paketi kurar, gerekirse Python'u da indirir. `/token-lab:token-lab` ya da `/token-lab:optimize` ile çalıştırdığında Claude raporu (optimize'da incelenen dosyaları da) oturumundaki herhangi bir dosya gibi okur; yani Claude konuşman nereye gidiyorsa o da oraya gider.
 - **Arkada çalışan bir şey bırakmaz.** Hook, arka plan programı, zamanlanmış görev kurmaz.
 - Bir bulguyu uygulamak istersen Claude'a söylersin; o da dosyayı ve farkı gösterip onayını alarak uygular.
 
@@ -35,13 +35,13 @@ En kolayı: Claude Code'a bu sayfanın linkini verip **"bunu kur"** de. Ya da te
 Windows (PowerShell):
 
 ```powershell
-irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
+irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.ps1 | iex
 ```
 
 macOS / Linux:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.sh | sh
 ```
 
 [`install.ps1`](install.ps1) ve [`install.sh`](install.sh) sadece şunları yapar: Claude Code kurulu mu bakar, `uv` yoksa kurar (Windows'ta `winget`, macOS/Linux'ta uv'nin kendi kurulum betiği), bu plugin'i ekler ve kurar, daha önce kapatmadıysan otomatik güncellemesini açar (`/plugin` → Marketplaces → token-kit'teki düğmenin aynısı). Başka hiçbir ayara dokunmaz; kısa, açıp okuyabilirsin.
@@ -51,7 +51,7 @@ Sonra Claude Code'u yeniden aç ve `/token-lab:token-lab` yaz.
 **Güncelleme:** otomatik güncelleme açıkken Claude Code yeni sürümü oturum başladıktan birkaç dakika içinde kendisi alır ve "Plugin updated · Run /reload-plugins" der. Hemen güncellemek için kurulum komutunu yeniden çalıştır. Otomatik güncellemeyi kapatmak için: `/plugin` → Marketplaces → token-kit.
 
 > **Claude için kurulum adımları** (kullanıcı bu repoyu kurmanı istediyse):
-> 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.sh | sh`
+> 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.3/install.sh | sh`
 > 2. Çıktıda "Installed" yoksa, yazan hatayı kullanıcıya olduğu gibi söyle ve dur.
 > 3. Kullanıcıya şunu söyle: "Kuruldu. Bu oturumda `/reload-plugins` yaz ya da Claude'u yeniden aç, sonra `/token-lab:token-lab` yaz."
 > 4. Kurulum dışında hiçbir ayarı değiştirme.
@@ -86,6 +86,8 @@ Raporun metni İngilizce. `/token-lab:token-lab` onu Claude'a senin dilinde öze
 - **5. bölüm:** ajan işleri. Hangi tekrar eden iş isimli bir ajana taşınabilir, hangi ajan kullanılmıyor.
 
 Rapor ne kadar geriye bakabilir? Claude Code eski kayıtları `cleanupPeriodDays` ayarına göre siler (varsayılan 30 gün). Bu ayar senin.
+
+**Bir değişiklik işe yaradı mı?** `uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why --until 2026-11-10` raporu o günün başına (UTC) kadarki transcript'lerden çıkarır; diskteki dosyalar (hafıza, ajanlar, skill'ler) bugünkü hâliyle okunur. Özet'ini bugünküyle karşılaştır; ya da `/token-lab:token-lab` içinde Claude'dan bir tarihten önce ve sonrasını karşılaştırmasını iste.
 
 ## Genel optimizasyon: `/token-lab:optimize`
 
@@ -132,3 +134,5 @@ uv sync
 uv run pytest -q
 uv run ruff check . && uv run mypy src
 ```
+
+Desteklenen komutlar `why` ve `inventory`; diğerleri araştırma araçları, duruyor ama desteklenmiyor. Bkz. [CONTRIBUTING.md](CONTRIBUTING.md), [CHANGELOG.md](CHANGELOG.md), [SECURITY.md](SECURITY.md).

@@ -38,6 +38,7 @@ class Row:
     truth: dict[str, int]
     ledger_cost: float
     truth_cost: float
+    asof: str = ""  # the last transcript time the counter covers
 
     @property
     def source(self) -> str:
@@ -94,6 +95,7 @@ def rows(conn: sqlite3.Connection) -> list[Row]:
                 dict(zip(FIELDS, truth_vals, strict=True)),
                 cost,
                 truth_cost,
+                asof,
             )
         )
     return out
