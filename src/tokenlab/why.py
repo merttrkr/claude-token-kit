@@ -33,25 +33,25 @@ from tokenlab.rules import DEFAULT, Rules
 
 INF = 1 << 62
 CATEGORY = {
-    "file": "CLAUDE.md ve hafıza dosyaları",
-    "rule": "klasör kuralları (okunan dosyayla yüklenen)",
-    "skill": "skill listesi",
-    "agent": "ajan listesi",
-    "mcp": "MCP talimatları",
-    "deferred": "ertelenen araç adları",
-    "skill_body": "çağrılan skill gövdeleri",
-    "hook": "hook metni",
+    "file": "CLAUDE.md and memory files",
+    "rule": "folder rules (loaded with the file read)",
+    "skill": "skill list",
+    "agent": "agent list",
+    "mcp": "MCP instructions",
+    "deferred": "deferred tool names",
+    "skill_body": "invoked skill bodies",
+    "hook": "hook text",
 }
 # Every angle the report looks at, in display order for ties. A finding's code is
 # its angle; D (CLAUDE.md) and H (hooks) are measured but never called waste.
 ANGLE = {
-    "R": "Araç çıktıları",
-    "M": "Hafıza",
-    "D": "CLAUDE.md ve kurallar",
-    "T": "Araçlar ve MCP",
-    "A": "Ajanlar",
-    "S": "Skill'ler",
-    "H": "Hook'lar",
+    "R": "Tool outputs",
+    "M": "Memory",
+    "D": "CLAUDE.md and rules",
+    "T": "Tools and MCP",
+    "A": "Agents",
+    "S": "Skills",
+    "H": "Hooks",
     "C": "Cache",
 }
 # ToolSearch: denying it loads every deferred tool in full. The placeholder is
@@ -188,17 +188,22 @@ def _names(xs: list[str], cap: int = 8) -> str:
 
 
 def _human(n: float) -> str:
-    """11,252,735,713 → '11,3 milyar': a size anyone can read."""
-    for size, word in ((1e9, "milyar"), (1e6, "milyon")):
+    """11,252,735,713 → '11.3 billion': a size anyone can read."""
+    for size, word in ((1e9, "billion"), (1e6, "million")):
         if n >= size:
-            return f"{n / size:.1f}".replace(".", ",") + f" {word}"
-    return f"{n / 1e3:.0f} bin" if n >= 1e4 else f"{int(n):,}"
+            return f"{n / size:.1f} {word}"
+    return f"{n / 1e3:.0f} thousand" if n >= 1e4 else f"{int(n):,}"
+
+
+def _n(count: int, one: str, many: str) -> str:
+    """`1 tool was`, `3 tools were`: a count with the right English form."""
+    return f"{count:,} {one if count == 1 else many}"
 
 
 def _share(part: float, whole: float) -> str:
     if not whole or part <= 0:
         return "-"
-    return "<%1" if part / whole < 0.01 else f"%{part / whole * 100:.0f}"
+    return "<1%" if part / whole < 0.01 else f"{part / whole * 100:.0f}%"
 
 
 def render(
@@ -209,7 +214,7 @@ def render(
 ) -> str:
     win = _window(conn, days)
     if win is None:
-        return "Henüz hiç Claude Code isteği yok: birkaç oturumdan sonra tekrar dene.\n"
+        return "No Claude Code requests yet: try again after a few sessions.\n"
     start, end = win
     span = max(
         1.0, (datetime.fromisoformat(end) - datetime.fromisoformat(start)).days + 1.0
@@ -258,10 +263,10 @@ def render(
         k = carry.shape(tid, seq)
         n, w = k * chars, weighted(chars, k)
         if source == "system":
-            cat = "sistem prompt'u"
+            cat = "system prompt"
         else:
             mcp = name.startswith("mcp__")
-            cat = "araç tanımları (MCP)" if mcp else "araç tanımları"
+            cat = "tool definitions (MCP)" if mcp else "tool definitions"
             by_part[("tool", name)] += n
             wpart[("tool", name)] += w
         by_cat[cat] += n
@@ -366,18 +371,19 @@ def render(
                 "T",
                 chars,
                 wpart[(kind, name)],
-                f"`{name}` aracı {days} günde hiç çağrılmadı",
-                "her istekte tanımı gidiyor",
-                "kullanmıyorsan `permissions.deny`'a ekle",
+                f"tool `{name}` was never called in {days} days",
+                "its definition is sent with every request",
+                "if you do not use it, add it to `permissions.deny`",
             )
     for server, tools in mcp_unused.items():
         add(
             "T",
             mcp_raw[server],
             mcp_cost[server],
-            f"MCP `{server}`: {len(tools)} araç hiç çağrılmadı",
+            f"MCP `{server}`: {_n(len(tools), 'tool was', 'tools were')} never called",
             _names(sorted(tools)),
-            "`permissions.deny`'a ekle (`mcp__<sunucu>__<araç>`) ya da sunucuyu kapat",
+            "add to `permissions.deny` (`mcp__<server>__<tool>`) or turn the server"
+            " off",
         )
 
     # S / A: listing lines for skills and agents that were never used.
@@ -386,17 +392,17 @@ def render(
             "skill",
             skill_calls,
             "skill",
-            "`skillOverrides`: `user-invocable-only` (/ad ile çağrılır) ya da `off`",
-            "plugin skill'i: `skillOverrides` işlemez; SKILL.md'ye"
+            "`skillOverrides`: `user-invocable-only` (called with /name) or `off`",
+            "plugin skill: `skillOverrides` does not work; add to SKILL.md"
             " `disable-model-invocation: true`",
         ),
         (
             "agent",
             agent_calls,
-            "ajan",
-            "kendi ajanınsa dosyasını kaldır; yerleşikse `permissions.deny`'a"
-            " `Agent(<ad>)` ekle",
-            "`permissions.deny`'a `Agent(<ad>)` ekle",
+            "agent",
+            "if it is your own agent, remove its file; if built in, add"
+            " `Agent(<name>)` to `permissions.deny`",
+            "add `Agent(<name>)` to `permissions.deny`",
         ),
     ):
         groups: dict[str, list[str]] = defaultdict(list)
@@ -409,16 +415,13 @@ def render(
                 cost[_owner(name)] += wpart[(pk, name)]
         for owner, names in groups.items():
             # No owner prefix: the user's own or built in; the listing can't tell.
-            who = (
-                f"`{owner}` plugin'inin {len(names)} {label}'i"
-                if owner
-                else f"{len(names)} {label}"
-            )
+            many = f"{len(names)} {label}{'s' if len(names) != 1 else ''}"
+            who = f"plugin `{owner}`: {many}" if owner else many
             add(
                 "S" if kind == "skill" else "A",
                 raw[owner],
                 cost[owner],
-                f"{who} listede ama {days} günde hiç kullanılmadı",
+                f"{who} listed but never used in {days} days",
                 _names(sorted(names)),
                 fix_plugin if owner else fix_own,
             )
@@ -430,10 +433,10 @@ def render(
             "S",
             sum(c for (k, _), c in by_part.items() if k == "skill_body"),
             sum(bodies.values()),
-            f"{len(bodies)} skill'in gövdesi compaction'dan sonra yeniden eklendi"
-            " ve taşındı",
+            f"{_n(len(bodies), 'skill body was', 'skill bodies were')} added again"
+            " after compaction and carried",
             _names(ranked, 5),
-            "büyük skill'i küçült: ayrıntıyı ayrı referans dosyalarına taşı",
+            "shrink the big skill: move detail into separate reference files",
         )
 
     # M: memory index lines whose file was never read.
@@ -459,14 +462,23 @@ def render(
         for (dead_chars, dead), text, fix in (
             (
                 unread,
-                f"hafıza index'inde {len(unread[1])} satırın dosyası {days} günde"
-                " Read ile hiç okunmadı",
-                "arşivle ya da tek satırlık bir özet altında topla",
+                _n(
+                    len(unread[1]),
+                    "memory index line points",
+                    "memory index lines point",
+                )
+                + f" to files never read with Read in {days} days",
+                "archive them or group them under a one-line summary",
             ),
             (
                 missing,
-                f"hafıza index'inde {len(missing[1])} satırın dosyası yok",
-                "satırı sil ya da yolu düzelt",
+                _n(
+                    len(missing[1]),
+                    "memory index line points",
+                    "memory index lines point",
+                )
+                + " to missing files",
+                "delete the line or fix the path",
             ),
         ):
             if dead:
@@ -494,10 +506,11 @@ def render(
                 "M",
                 sum(written.values()),
                 sum(written.values()),
-                f"{len(written)} hafıza dosyası yazıldı ama {days} günde Read ile"
-                " hiç okunmadı",
+                f"{_n(len(written), 'memory file was', 'memory files were')}"
+                " written but never read with Read"
+                f" in {days} days",
                 _names(sorted(Path(w).name for w in written), 5),
-                "gerçekten gerekiyor mu bak; gerekmiyorsa yazma kuralını daralt",
+                "check if it is really needed; if not, narrow the rule that writes it",
             )
 
     # A: an outside system read by the main session itself, again and again. An
@@ -560,10 +573,10 @@ def render(
             tok(saving * week),
         )
         verdict = sys_fit.verdict(rules)
-        if verdict == "tekrar etmiyor":
+        if verdict == "not recurring":
             continue
-        candidates.append((f"`{system}` okuma", "ana oturum", sys_fit))
-        if verdict.startswith("değmez"):
+        candidates.append((f"`{system}` reading", "main session", sys_fit))
+        if verdict.startswith("not worth it"):
             continue
         sys_raw, sys_cost = 0.0, 0.0
         sys_tools: Counter[str] = Counter()
@@ -585,9 +598,11 @@ def render(
             "A",
             sys_raw,
             sys_cost,
-            f"ana oturum `{system}` sistemini {len(sys_reads)} kez kendisi okudu"
-            f" ({sys_fit.sessions} oturum); sonuçlar sonraki her istekte taşındı",
-            "en çok: "
+            f"the main session read system `{system}` itself"
+            f" {_n(len(sys_reads), 'time', 'times')}"
+            f" ({_n(sys_fit.sessions, 'session', 'sessions')});"
+            " results were carried in every later request",
+            "most: "
             + _names(
                 [
                     f"{t.split('__', 2)[-1]} ×{c}"
@@ -596,10 +611,10 @@ def render(
                 3,
             ),
             (
-                f"{_names([f'`{a}`' for a in able], 3)} bu sistemi zaten okuyabiliyor:"
-                " ana oturum işi ona versin diye açıklamasını keskinleştir"
+                f"{_names([f'`{a}`' for a in able], 3)} can already read this system:"
+                " sharpen its description so the main session hands the job over"
                 if able
-                else f"`{system}` okuyup kısa özet döndüren bir ajan yaz"
+                else f"write an agent that reads `{system}` and returns a short summary"
             ),
         )
         if len(findings) > before:
@@ -610,7 +625,7 @@ def render(
         if sig == NO_TRACE:  # what it read or wrote is not visible
             continue
         gp_fit = fit([Unit(c.session, c.day, c.read_chars, c.tools) for c in jobs])
-        if gp_fit.verdict(rules) != "tekrar etmiyor":
+        if gp_fit.verdict(rules) != "not recurring":
             candidates.append((sig, "general-purpose", gp_fit))
 
     # R: large tool results and files read again and again.
@@ -641,12 +656,13 @@ def render(
             "R",
             big_raw[tool],
             big_cost[tool],
-            f"`{tool}` {count} kez {rules.big_result_chars:,}+ karakter"
-            " döndürdü; sonraki her istekte taşındı",
-            "en pahalı: " + _names(sorted(files, key=lambda f: (-files[f], f)), 3)
+            f"`{tool}` ×{count} returned {rules.big_result_chars:,}+ characters;"
+            " carried in every later request",
+            "most expensive: " + _names(sorted(files, key=lambda f: (-files[f], f)), 3)
             if files
-            else f"en büyüğü {biggest[tool]:,} karakter",
-            "çıktıyı daralt: Read'e limit/offset, Grep'e desen, komut çıktısını kısalt",
+            else f"largest {biggest[tool]:,} characters",
+            "narrow the output: limit/offset for Read, a pattern for Grep,"
+            " shorter command output",
         )
     results: dict[tuple[str, str], list[tuple[int, str, int]]] = defaultdict(list)
     for tid, target, seq, ts, chars in conn.execute(
@@ -682,9 +698,10 @@ def render(
             "R",
             again_raw,
             again_cost,
-            f"{len(again)} dosya aynı oturumda {rules.reread_min}+ kez okundu",
+            f"{_n(len(again), 'file was', 'files were')} read"
+            f" {rules.reread_min}+ times in one session",
             _names(top, 4),
-            "bir kez oku, gerekirse sadece değişen aralığı oku",
+            "read once; if needed, read only the changed range",
         )
 
     # C: cold cache after an idle gap longer than the cache TTL (measured tokens).
@@ -713,9 +730,10 @@ def render(
             "C",
             cold_raw / tpc,
             cold_cost / tpc,
-            f"{cold} kez cache soğudu: boşluktan sonra bağlam yeniden yazıldı",
-            "token sayısı ölçülen (tahmin değil)",
-            "uzun aradan sonra /compact ya da yeni oturum; uzun işleri böl",
+            f"cache went cold {cold} time{'s' if cold != 1 else ''}:"
+            " context was rewritten after a gap",
+            "token count is measured (not estimated)",
+            "after a long break use /compact or a new session; split long jobs",
         )
 
     # E: repeated failures.
@@ -766,7 +784,7 @@ def render(
         share = float(sum(f.cost for f in mine))
         found, todo = "", ""
         if mine:
-            found = mine[0].text + (f" (+{len(mine) - 1} bulgu)" if mine[1:] else "")
+            found = mine[0].text + (f" (+{len(mine) - 1} findings)" if mine[1:] else "")
             todo = mine[0].fix
         if code == "D":
             docs = sorted(
@@ -782,17 +800,18 @@ def render(
             if docs:
                 name, c = docs[0]
                 found = (
-                    f"{len(docs)} dosya; en pahalısı {Path(name).name}"
+                    f"{_n(len(docs), 'file', 'files')};"
+                    f" most expensive {Path(name).name}"
                     f" ({_share(tok(c * week), paid_week)})"
                 )
-                todo = "gereksiz satırları Claude'a buldur (4. bölüm)"
+                todo = "have Claude find the unneeded lines (section 4)"
         elif code == "A":
             total = sum(agent_calls.values())
             generic = sum(agent_calls[g] for g in GENERIC)
             if total:
                 head = (
-                    f"general-purpose payı %{generic / total * 100:.0f}"
-                    f" ({generic}/{total} çağrı)"
+                    f"general-purpose share {generic / total * 100:.0f}%"
+                    f" ({generic}/{total} calls)"
                 )
                 # The last days too: a change made mid-week shows there first,
                 # and the latest share decides the advice.
@@ -807,52 +826,54 @@ def render(
                     if runs:
                         g = sum(a in GENERIC for a in runs)
                         latest = g / len(runs)
-                        head += f", son {back} gün %{latest * 100:.0f}"
+                        head += f", last {back} days {latest * 100:.0f}%"
                 found = head + ("; " + found if mine else "")
                 if latest >= 0.2:
-                    todo = "tekrar eden işleri isimli bir ajana taşı (5. bölüm)"
-            ready = [c for c in candidates if c[2].verdict(rules) == "ajan adayı"]
+                    todo = "move the recurring jobs to a named agent (section 5)"
+            ready = [c for c in candidates if c[2].verdict(rules) == "agent candidate"]
             if ready:
                 found = (found + "; " if found else "") + (
-                    f"{len(ready)} iş ölçülen ajan koşullarını geçiyor"
+                    _n(len(ready), "job meets", "jobs meet")
+                    + " the measured agent conditions"
                 )
-                todo = "2. bölüm sonundaki ajan adaylarını yaz (`agent.md`)"
+                todo = "write the agent candidates at the end of section 2 (`agent.md`)"
         elif code == "H":
             share = tok(hook_cost * week)
             if hook_raw or hooks:
                 found = (
-                    f"hook metni haftada {_human(tok(hook_raw * week))} token taşındı;"
-                    f" {hooks} çağrı engellendi"
+                    f"hook text carried {_human(tok(hook_raw * week))} tokens a week;"
+                    f" {_n(hooks, 'call', 'calls')} blocked"
                 )
                 if share / max(1.0, paid_week) >= 0.01:
-                    todo = "hook'un her seferinde eklediği metin gerekli mi bak"
+                    todo = "check if the text the hook adds every time is needed"
         elif code == "C" and cache:
             share = cache[0].cost
-            found = cache[0].text + " (gözlem)"
-            todo = "uzun aradan sonra yeni oturum aç; kesin bir düzeltme değil"
-        rows.append((share, angle, found or "sorun yok", todo or "-", code))
+            found = cache[0].text + " (observation)"
+            todo = "open a new session after a long break; not a sure fix"
+        rows.append((share, angle, found or "no issue", todo or "-", code))
 
     cut = sum(f.cost for f in waste)
     lines = [
-        f"# Token haritası — son {int(span)} gün ({start[:10]} → {end[:10]})",
+        f"# Token map — last {int(span)} days ({start[:10]} → {end[:10]})",
         "",
-        f"**Her istekte aynı kısım tekrar gidiyor: istek başına"
-        f" ~{_human(per_request)} token, gönderilenin"
-        f" {_share(tok(total_carried), prompt)} kadarı.**",
+        f"**The same fixed part is sent again with every request: about"
+        f" {_human(per_request)} tokens per request,"
+        f" {_share(tok(total_carried), prompt)} of what is sent.**",
         (
-            f"**Kesilebilir israf: haftalık maliyetin ~{_share(cut, paid_week)}"
-            f" kadarı, {len(waste)} madde. En büyüğü"
+            f"**Cuttable waste: about {_share(cut, paid_week)} of weekly cost,"
+            f" {_n(len(waste), 'item', 'items')}. The largest is"
             f" {ANGLE[waste[0].code].lower()}.**"
             if waste
-            else "**Eşiği geçen kesilebilir israf yok.**"
+            else "**No cuttable waste above the threshold.**"
         ),
         "",
-        f"{sessions} oturum · {n_req:,} istek · Claude'a {_human(prompt)} token"
-        f" gitti, {_human(output)} token geldi.",
+        f"{_n(sessions, 'session', 'sessions')}"
+        f" · {_n(n_req, 'request', 'requests')} · {_human(prompt)} tokens"
+        f" went to Claude, {_human(output)} tokens came back.",
         "",
-        "## Özet",
+        "## Summary",
         "",
-        "| açı | ne bulundu | maliyetteki payı | ne yapılır |",
+        "| angle | what was found | share of cost | what to do |",
         "|---|---|---|---|",
     ]
     order = list(ANGLE)
@@ -860,20 +881,22 @@ def render(
         rows, key=lambda r: (-r[0], order.index(r[4]))
     ):
         lines.append(f"| {angle} | {found} | {_share(share, paid_week)} | {todo} |")
-    lines += ["", "## İlk adım", ""]
+    lines += ["", "## First step", ""]
     if waste:
         first = waste[0]
         lines.append(
-            f"{ANGLE[first.code]}: {first.text}. Yapılacak: {first.fix}."
-            f" Maliyetteki payı ~{_share(first.cost, paid_week)}."
+            f"{ANGLE[first.code]}: {first.text}. To do: {first.fix}."
+            f" Share of cost ~{_share(first.cost, paid_week)}."
         )
     else:
-        lines.append("Kesilebilir bulgu yok; 4. bölümdeki dosyaları okutmayı dene.")
+        lines.append(
+            "Nothing cuttable found; try having Claude read the files in section 4."
+        )
     lines += [
         "",
-        "## 1. Tekrar tekrar giden sabit kısım",
+        "## 1. The fixed part sent again and again",
         "",
-        "| parça | istek başına (tahmini token) | token payı | maliyet payı |",
+        "| part | per request (estimated tokens) | token share | cost share |",
         "|---|---|---|---|",
     ]
     for cat, chars in sorted(wcat.items(), key=lambda kv: (-kv[1], kv[0])):
@@ -883,19 +906,19 @@ def render(
             f" | {_share(tok(chars), paid)} |"
         )
     lines.append(
-        f"| **toplam** | **{per_request:,}** |"
+        f"| **total** | **{per_request:,}** |"
         f" **{_share(tok(total_carried), prompt)}** |"
         f" **{_share(tok(total_weighted), paid)}** |"
     )
     lines += [
         "",
-        "## 2. Olmaması gerekenler (maliyete göre, büyükten küçüğe)",
+        "## 2. What should not be there (by cost, largest first)",
         "",
     ]
     if waste:
         lines += [
-            "| açı | maliyetteki payı | haftalık token (girdi-eşdeğeri) | bulgu"
-            " | kanıt | ne yapılır |",
+            "| angle | share of cost | weekly tokens (input-equivalent) | finding"
+            " | evidence | what to do |",
             "|---|---|---|---|---|---|",
         ]
         lines += [
@@ -904,26 +927,26 @@ def render(
             for f in waste
         ]
     else:
-        lines.append("Eşiği geçen bulgu yok.")
+        lines.append("No finding above the threshold.")
     if candidates:
-        rank = {"ajan adayı": 0}
+        rank = {"agent candidate": 0}
         lines += [
             "",
-            "### Ajan adayları (ajan standardına göre)",
+            "### Agent candidates (by the agent standard)",
             "",
-            f"Tekrar eden = {rules.min_recur}+ çağrı, {rules.min_sessions}+"
-            f" oturum, {rules.min_days}+ gün. Birim: ajan çağrısı; ana oturumda bir"
-            " kullanıcı mesajı için yapılan okumalar. Çok okuyan = birim başına"
-            f" {rules.agent_read_chars:,}+ karakter (bir ajan özetinden büyük)."
-            f" Sabit kapsam = çağrıların %{rules.scope_share * 100:.0f}+'ı"
-            " işin çekirdek araçlarıyla yetiniyor (ana oturum işinde tek sunucu tek"
-            " izin listesidir, hep sabit sayılır; hükmü okunan boyut verir). Modelin"
-            " işi yönetmesi"
-            " gerekip gerekmediği ölçülmez: `references/agent.md`.",
+            f"Recurring = {rules.min_recur}+ calls, {rules.min_sessions}+"
+            f" sessions, {rules.min_days}+ days. Unit: an agent call; in the main"
+            " session, the reads made for one user message. Heavy reader = per unit"
+            f" {rules.agent_read_chars:,}+ characters (bigger than an agent summary)."
+            f" Fixed scope = {rules.scope_share * 100:.0f}%+ of the calls"
+            " get by with the core tools of the job (in main-session work one server"
+            " is one allowlist, always counted as fixed; the read size decides the"
+            " verdict). Whether the model has to steer the job"
+            " is not measured: `references/agent.md`.",
             "",
-            "| iş (okuduğu → yazdığı) | nerede | birim | oturum | gün"
-            " | okunan (medyan karakter) | haftalık kazanç (tahmini token)"
-            " | çekirdek araçlarla | hüküm |",
+            "| job (reads → writes) | where | unit | sessions | days"
+            " | read (median characters) | weekly saving (estimated tokens)"
+            " | with core tools | verdict |",
             "|---|---|---|---|---|---|---|---|---|",
         ]
         ranked_jobs = sorted(
@@ -935,47 +958,51 @@ def render(
                 f"| {job} | {where} | {jf.calls} | {jf.sessions} | {jf.days}"
                 f" | {jf.read_chars:,}"
                 f" | {f'{jf.saving:,}' if jf.saving is not None else '-'}"
-                f" | %{jf.scope * 100:.0f}"
+                f" | {jf.scope * 100:.0f}%"
                 f" | {jf.verdict(rules)} |"
             )
         hidden = ranked_jobs[rules.max_candidates :]
         if hidden:
-            passing = sum(c[2].verdict(rules) == "ajan adayı" for c in hidden)
+            passing = sum(c[2].verdict(rules) == "agent candidate" for c in hidden)
             lines += [
                 "",
-                f"+{len(hidden)} iş daha"
+                f"+{_n(len(hidden), 'more job', 'more jobs')}"
                 + (
-                    f", {passing} tanesi ajan adayı."
+                    f", {passing} of them"
+                    + (" an agent candidate." if passing == 1 else " agent candidates.")
                     if passing
-                    else "; hiçbiri koşulları geçmiyor."
+                    else "; none meet the conditions."
                 ),
             ]
     lines += [
         "",
-        "Maliyet = girdi-eşdeğeri token: önbellekten okunan token 0.1, önbelleğe"
-        " yazılan 1.25 (5 dk) ya da 2 (1 sa) sayılır; Claude Code'un fiyat oranları."
-        " Abonelikte kotaya etkisi ölçülmedi. 1 karakter ≈ "
+        "Cost = input-equivalent tokens: a token read from the cache counts 0.1, a"
+        " token written to the cache 1.25 (5 min) or 2 (1 h); Claude Code's price"
+        " ratios. The effect on a subscription quota is not measured. 1 character ≈ "
         + (
-            f"{tpc:.3f} token (bu veriden ölçüldü)."
+            f"{tpc:.3f} tokens (measured from this data)."
             if ratio
-            else "0.25 token (varsayım: ölçecek ilk istek yok)."
+            else "0.25 tokens (assumed: no first request to measure)."
         ),
     ]
     for f in cache:
-        lines += ["", f"Gözlem: {f.text}; haftada {f.cost:,} girdi-eşdeğeri token."]
+        lines += [
+            "",
+            f"Observation: {f.text}; {f.cost:,} input-equivalent tokens a week.",
+        ]
     if fixed:
         lines += [
             "",
-            f"{fixed} öğe son {rules.current_days} günün oturumlarında yok:"
-            " zaten düzelmiş görünüyor, listelenmedi.",
+            f"{_n(fixed, 'item is', 'items are')} absent from the sessions of the last"
+            f" {rules.current_days} days: they look already fixed, not listed.",
         ]
     if errors or hooks or truncated:
         top_errors = sorted(errors.items(), key=lambda kv: (-kv[1], kv[0]))[:6]
         err_text = ", ".join(f"{t} {n}" for t, n in top_errors) or "-"
         lines += [
             "",
-            f"Araç hataları: {err_text} · hook engeli: {hooks}"
-            f" · kırpılan okuma: {truncated}",
+            f"Tool errors: {err_text} · hook blocks: {hooks}"
+            f" · truncated reads: {truncated}",
         ]
     carried = sorted(
         ((n, c) for (k, n), c in wpart.items() if k in ("file", "rule", "skill_body")),
@@ -983,22 +1010,22 @@ def render(
     )[:6]
     lines += [
         "",
-        "## 3. Görünmeyen",
+        "## 3. Not visible",
         "",
-        "- Oturum başlığı, compaction özeti ve öneri istekleri transcript'e yazılmaz;"
-        " bu rapor onları göremez.",
-        "- Token'ın ne kazandırdığı (iş bitti mi, sonuç doğru muydu) kayıtlarda yok."
-        " Rapor maliyeti ve kullanılmayanı görür, değeri değil.",
+        "- The session title, the compaction summary and suggestion requests are not"
+        " written to the transcript; this report cannot see them.",
+        "- What the tokens bought (was the job done, was the result right) is not in"
+        " the records. The report sees cost and what is unused, not value.",
         "",
-        "## 4. İsteğe bağlı: Claude okuması (model işi)",
+        "## 4. Optional: Claude reading (model work)",
         "",
-        "En çok taşınan dosyalar ve skill gövdeleri. İstersen Claude bunları şu"
-        " sorularla okur: davranışı değiştiriyor mu, doğru okuyucuya mı gidiyor,"
-        " doğru yerde mi, Claude'un kendi varsayılanını mı tekrar ediyor?",
+        "The most carried files and skill bodies. If you want, Claude reads them with"
+        " these questions: does it change behavior, does it reach the right reader,"
+        " is it in the right place, does it repeat Claude's own default?",
         "",
     ]
     lines += [
-        f"- {name} — maliyetteki payı {_share(tok(c * week), paid_week)}"
+        f"- {name} — share of cost {_share(tok(c * week), paid_week)}"
         for name, c in carried
     ]
     return "\n".join(lines) + "\n"

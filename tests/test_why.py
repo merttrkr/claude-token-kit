@@ -155,8 +155,8 @@ def test_unused_tools_skills_and_agents_are_findings(conn: sqlite3.Connection) -
     tools = " ".join(finding(text, "T"))
     assert "`Unused`" in tools and "MCP `srv`" in tools and "`Read`" not in tools
     skills = finding(text, "S")
-    assert any("1 skill listede" in r and "idle-skill" in r for r in skills)
-    assert any("`plug` plugin" in r and "plug:idle" in r for r in skills)
+    assert any("1 skill listed" in r and "idle-skill" in r for r in skills)
+    assert any("plugin `plug`" in r and "plug:idle" in r for r in skills)
     assert "used-skill" not in " ".join(skills)
     agents = " ".join(finding(text, "A"))
     assert "idle-agent" in agents and "scout" not in agents
@@ -166,8 +166,8 @@ def test_memory_lines_whose_file_was_never_read_or_is_gone(
     conn: sqlite3.Connection,
 ) -> None:
     rows = finding(why.render(conn, 30, LOW), "M")
-    unread = [r for r in rows if "hiç okunmadı" in r]
-    gone = [r for r in rows if "dosyası yok" in r]
+    unread = [r for r in rows if "never read" in r]
+    gone = [r for r in rows if "missing files" in r]
     assert len(unread) == 1 and "idle-one.md" in unread[0]
     assert "read-one.md" not in " ".join(rows)
     assert len(gone) == 1 and "gone.md" in gone[0]
@@ -175,9 +175,9 @@ def test_memory_lines_whose_file_was_never_read_or_is_gone(
 
 def test_big_results_and_cold_cache(conn: sqlite3.Connection) -> None:
     text = why.render(conn, 30, LOW)
-    big = [r for r in finding(text, "R") if "`Read` 1 kez" in r]
+    big = [r for r in finding(text, "R") if "`Read` ×1" in r]
     assert big and "read-one.md" in big[0]  # the evidence names the file
-    assert "1 kez cache soğudu" in summary(text)
+    assert "cache went cold 1 time:" in summary(text)
 
 
 def test_an_item_gone_from_recent_sessions_counts_as_fixed(
@@ -204,12 +204,12 @@ def test_an_item_gone_from_recent_sessions_counts_as_fixed(
     text = why.render(sqlite3.connect(db), 30, LOW)
     skills = " ".join(finding(text, "S"))
     assert "idle-skill" not in skills and "plug:idle" in skills
-    assert "zaten düzelmiş görünüyor" in text
+    assert "they look already fixed" in text
 
 
 def test_a_finding_below_the_cutoff_is_not_shown(conn: sqlite3.Connection) -> None:
     high = Rules(min_weekly_tokens=10**12, big_result_chars=100, cold_write_tokens=10)
-    assert "Eşiği geçen bulgu yok." in why.render(conn, 30, high)
+    assert "No finding above the threshold." in why.render(conn, 30, high)
 
 
 def test_a_carried_part_is_written_once_then_read() -> None:
@@ -249,45 +249,45 @@ def test_report_is_byte_identical_after_a_rebuild(
 
 def test_an_empty_ledger_says_so(tmp_path: Path) -> None:
     empty = create(tmp_path / "e.sqlite")
-    assert "Henüz hiç Claude Code isteği yok" in why.render(empty, 30)
+    assert "No Claude Code requests yet" in why.render(empty, 30)
 
 
 def test_the_report_opens_with_a_summary_of_every_angle(
     conn: sqlite3.Connection,
 ) -> None:
     head = summary(why.render(conn, 30, LOW))
-    assert head.index("## Özet") < head.index("## İlk adım")
+    assert head.index("## Summary") < head.index("## First step")
     # One line per angle, findings or not, so nothing is silently skipped.
     for angle in why.ANGLE.values():
         assert f"| {angle} |" in head
-    assert "kesilebilir" in head.lower()
+    assert "cuttable" in head.lower()
 
 
 def test_cache_cooling_is_an_observation_not_the_first_step(
     conn: sqlite3.Connection,
 ) -> None:
     text = why.render(conn, 30, LOW)
-    first = text.split("## İlk adım", 1)[1].split("##", 1)[0]
+    first = text.split("## First step", 1)[1].split("##", 1)[0]
     assert "cache" not in first.lower()
     cache = next(r for r in summary(text).splitlines() if r.startswith("| Cache |"))
-    assert "gözlem" in cache
+    assert "observation" in cache
 
 
 def test_agents_line_gives_the_general_purpose_share(conn: sqlite3.Connection) -> None:
     head = summary(why.render(conn, 30, LOW))
-    agents = next(r for r in head.splitlines() if r.startswith("| Ajanlar |"))
-    assert "general-purpose payı %50" in agents  # 1 of 2 subagent calls
+    agents = next(r for r in head.splitlines() if r.startswith("| Agents |"))
+    assert "general-purpose share 50%" in agents  # 1 of 2 subagent calls
 
 
 def test_hook_text_added_to_the_context_is_measured(conn: sqlite3.Connection) -> None:
     head = summary(why.render(conn, 30, LOW))
-    hooks = next(r for r in head.splitlines() if r.startswith("| Hook'lar |"))
-    assert "hook metni" in hooks
+    hooks = next(r for r in head.splitlines() if r.startswith("| Hooks |"))
+    assert "hook text" in hooks
 
 
 def test_hook_text_is_part_of_the_repeated_part(conn: sqlite3.Connection) -> None:
     section = why.render(conn, 30, LOW).split("## 1.", 1)[1].split("## 2.", 1)[0]
-    assert "| hook metni |" in section
+    assert "| hook text |" in section
 
 
 def test_a_big_read_read_again_is_counted_once(tmp_path: Path) -> None:
@@ -313,8 +313,8 @@ def test_a_big_read_read_again_is_counted_once(tmp_path: Path) -> None:
     db = tmp_path / "big.sqlite"
     ingest(root, db)
     rows = finding(why.render(sqlite3.connect(db), 30, LOW), "R")
-    assert any("`Read` 3 kez" in r for r in rows)
-    assert not any("kez okundu" in r for r in rows)
+    assert any("`Read` ×3" in r for r in rows)
+    assert not any("times in one session" in r for r in rows)
 
 
 def test_agent_trend_shows_the_last_week_and_the_last_days(tmp_path: Path) -> None:
@@ -350,10 +350,10 @@ def test_agent_trend_shows_the_last_week_and_the_last_days(tmp_path: Path) -> No
     db = tmp_path / "trend.sqlite"
     ingest(root, db)
     head = summary(why.render(sqlite3.connect(db), 30, LOW))
-    agents = next(r for r in head.splitlines() if r.startswith("| Ajanlar |"))
-    assert "son 7 gün %50, son 2 gün %0" in agents
+    agents = next(r for r in head.splitlines() if r.startswith("| Agents |"))
+    assert "last 7 days 50%, last 2 days 0%" in agents
     # The latest share is 0%: no advice to move work to a named agent.
-    assert "isimli bir ajana" not in agents
+    assert "a named agent" not in agents
 
 
 def three_days(
@@ -446,9 +446,9 @@ def three_days(
 
 
 def candidates_table(text: str) -> list[str]:
-    if "### Ajan adayları" not in text:
+    if "### Agent candidates" not in text:
         return []
-    part = text.split("### Ajan adayları", 1)[1].split("##", 1)[0]
+    part = text.split("### Agent candidates", 1)[1].split("##", 1)[0]
     return [r for r in part.splitlines() if r.startswith("| ") and "---" not in r][1:]
 
 
@@ -457,18 +457,18 @@ def test_main_session_reads_that_pass_the_standard_are_an_agent_candidate(
 ) -> None:
     text = three_days(tmp_path, main_chars=6000)
     found = [r for r in finding(text, "A") if "`tracker`" in r]
-    assert found and "6 kez" in found[0] and "ajan" in found[0]
+    assert found and "6 times" in found[0] and "agent" in found[0]
     # The same results are not counted again as big tool output.
     assert not any("get_issue" in r for r in finding(text, "R"))
     rows = [r for r in candidates_table(text) if "tracker" in r]
-    assert rows and "ana oturum" in rows[0] and "ajan adayı" in rows[0]
+    assert rows and "main session" in rows[0] and "agent candidate" in rows[0]
 
 
 def test_main_session_reads_smaller_than_a_summary_are_not(tmp_path: Path) -> None:
     text = three_days(tmp_path, main_chars=500)
     assert not any("`tracker`" in r for r in finding(text, "A"))
     rows = [r for r in candidates_table(text) if "tracker" in r]
-    assert rows and "değmez" in rows[0]
+    assert rows and "not worth it" in rows[0]
 
 
 def test_a_recurring_general_purpose_job_is_measured_against_the_standard(
@@ -479,14 +479,14 @@ def test_a_recurring_general_purpose_job_is_measured_against_the_standard(
         for r in candidates_table(three_days(tmp_path, gp_chars=6000))
         if "general-purpose" in r
     ]
-    assert rows and "ajan adayı" in rows[0] and "| 6 |" in rows[0]
+    assert rows and "agent candidate" in rows[0] and "| 6 |" in rows[0]
 
 
 def test_the_agents_line_counts_jobs_that_pass_the_standard(tmp_path: Path) -> None:
     head = summary(three_days(tmp_path, main_chars=6000, gp_chars=6000))
-    agents = next(r for r in head.splitlines() if r.startswith("| Ajanlar |"))
-    assert "2 iş ölçülen ajan koşullarını geçiyor" in agents
-    assert "ajan adaylarını yaz" in agents
+    agents = next(r for r in head.splitlines() if r.startswith("| Agents |"))
+    assert "2 jobs meet the measured agent conditions" in agents
+    assert "write the agent candidates" in agents
 
 
 def test_main_session_reads_are_measured_per_user_message(tmp_path: Path) -> None:
@@ -494,7 +494,7 @@ def test_main_session_reads_are_measured_per_user_message(tmp_path: Path) -> Non
     # summary: an agent doing that message's reading would pay off.
     text = three_days(tmp_path, main_chars=2000, per_turn=3)
     rows = [r for r in candidates_table(text) if "tracker" in r]
-    assert rows and "ajan adayı" in rows[0] and "| 6 |" in rows[0]
+    assert rows and "agent candidate" in rows[0] and "| 6 |" in rows[0]
 
 
 def test_work_with_no_visible_trace_is_not_a_candidate(tmp_path: Path) -> None:
@@ -528,7 +528,7 @@ def test_a_small_weekly_saving_is_not_worth_an_agent(tmp_path: Path) -> None:
         for r in candidates_table(three_days(tmp_path, main_chars=6000, rules=high))
         if "tracker" in r
     ]
-    assert rows and "değmez: haftalık kazanç küçük" in rows[0]
+    assert rows and "not worth it: small weekly saving" in rows[0]
 
 
 def test_an_agent_granted_only_another_tool_of_the_system_is_not_named(

@@ -73,7 +73,7 @@ uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 
 ## How to read the report
 
-The report text is in Turkish for now. `/token-lab:token-lab` has Claude summarize it in your language.
+The report is in English. `/token-lab:token-lab` has Claude summarize it in your language.
 
 - **Top:** two sentences with the main numbers, then a **Summary** table with one line per angle (tool output, cache, CLAUDE.md, memory, tools and MCP, skills, agents, hooks), largest share of cost first, and the **First step**.
 - **Section 1:** the part sent again on every request, and its share.

@@ -23,9 +23,9 @@ from datetime import datetime
 from pathlib import Path
 
 from tokenlab.rules import DEFAULT, Rules
-from tokenlab.why import Carry, _window, tokens_per_char, weighted
+from tokenlab.why import Carry, _n, _window, tokens_per_char, weighted
 
-KIND = {"file": "dosya", "rule": "kural", "skill": "skill", "agent": "ajan"}
+KIND = {"file": "file", "rule": "rule", "skill": "skill", "agent": "agent"}
 BACKTICK = re.compile(r"`([^`\n]+)`")
 MD_TARGET = re.compile(r"\]\(([^)\s#]+)\)")
 FILE_EXT = re.compile(r"\.(?:md|py|ps1|sh|json|toml|ya?ml|mjs|js|ts|cs|txt)$")
@@ -148,7 +148,7 @@ def render(
     win = _window(conn, days)
     if win is None:
         return (
-            "Henüz hiç Claude Code isteği yok: birkaç oturumdan sonra tekrar dene.\n",
+            "No Claude Code requests yet: try again after a few sessions.\n",
             "",
         )
     start, end = win
@@ -199,8 +199,8 @@ def render(
     }
     ranked = sorted(cost, key=lambda k: (-cost[k], k))
     header = (
-        "| tür | ad | dosya | karakter | haftalık maliyet (girdi-eşdeğeri token)"
-        " | kullanım |"
+        "| kind | name | file | characters | weekly cost (input-equivalent tokens)"
+        " | use |"
     )
     rows: list[str] = []
     for key in ranked:
@@ -213,15 +213,15 @@ def render(
                 chars = len(path.read_text(encoding="utf-8"))
             except (OSError, UnicodeDecodeError):
                 pass
-        used = f"{uses[key]} çağrı" if kind in ("skill", "agent") else "-"
+        used = _n(uses[key], "call", "calls") if kind in ("skill", "agent") else "-"
         rows.append(
-            f"| {KIND[kind]} | {label} | {path or 'yerleşik / bulunamadı'}"
+            f"| {KIND[kind]} | {label} | {path or 'built-in / not found'}"
             f" | {chars:,} | {int(cost[key] * week * tpc):,} | {used} |"
         )
     all_pieces = (
         "\n".join(
             [
-                "# Bütün parçalar (haftalık maliyete göre)",
+                "# All pieces (by weekly cost)",
                 "",
                 header,
                 "|---|---|---|---|---|---|",
@@ -231,12 +231,12 @@ def render(
         + "\n"
     )
     lines = [
-        f"# Envanter — son {int(span)} gün ({start[:10]} → {end[:10]})",
+        f"# Inventory — last {int(span)} days ({start[:10]} → {end[:10]})",
         "",
-        "Model okumasından önce betikle çıkarılanlar. 2. ve 3. bölüm kesin;"
-        " 4. bölüm aday, kararı okuma verir.",
+        "What a script finds before the model reads. Sections 2 and 3 are sure;"
+        " section 4 is candidates, the reading decides.",
         "",
-        "## 1. Parçalar (haftalık maliyete göre)",
+        "## 1. Pieces (by weekly cost)",
         "",
         header,
         "|---|---|---|---|---|---|",
@@ -247,9 +247,9 @@ def render(
     if rest:
         lines += [
             "",
-            f"+{len(rest)} parça daha, haftada toplam"
-            f" {int(sum(cost[k] for k in rest) * week * tpc):,} token;"
-            " tamamı `pieces.md`'de.",
+            f"+{len(rest)} more pieces,"
+            f" {int(sum(cost[k] for k in rest) * week * tpc):,} tokens a week in total;"
+            " all of them are in `pieces.md`.",
         ]
 
     # 2-3. What a script can check for sure in the piece files.
@@ -285,10 +285,10 @@ def render(
                 where[n].add("system prompt")
     lines += [
         "",
-        "## 2. Eskimiş referanslar (kesin: diskte yok)",
+        "## 2. Stale references (sure: not on disk)",
         "",
-        "Göreli yollar parçanın klasöründe ve üç üst klasörde aranır; tırnak"
-        " içindeki çıplak dosya adları ve klasör kalıpları kontrol edilmez.",
+        "Relative paths are looked up in the piece's folder and three folders up;"
+        " bare file names in quotes and folder patterns are not checked.",
         "",
     ]
     if missing:
@@ -296,15 +296,15 @@ def render(
         by_ref: dict[str, list[str]] = defaultdict(list)
         for loc, ref in sorted(set(missing)):
             by_ref[ref].append(loc)
-        lines += ["| referans | ilk yer | dosya sayısı |", "|---|---|---|"]
+        lines += ["| reference | first place | number of files |", "|---|---|---|"]
         refs_sorted = sorted(by_ref.items(), key=lambda kv: (-len(kv[1]), kv[0]))
         for ref, locs in refs_sorted[:MAX_STALE]:
             copies = {loc.rsplit(":", 1)[0] for loc in locs}
             lines.append(f"| `{ref}` | {locs[0]} | {len(copies)} |")
         if len(refs_sorted) > MAX_STALE:
-            lines += ["", f"+{len(refs_sorted) - MAX_STALE} referans daha."]
+            lines += ["", f"+{len(refs_sorted) - MAX_STALE} more references."]
     else:
-        lines.append("Yok.")
+        lines.append("None.")
     # A sentence the system prompt already says, line by line; two files that
     # share sentences, as one pair (usually a copy of the same skill).
     in_prompt = sorted(n for n, places in where.items() if "system prompt" in places)
@@ -318,29 +318,32 @@ def render(
             for b in owners[a_i + 1 :]:
                 pair_count[(a, b)] += 1
                 pair_example.setdefault((a, b), shown[n])
-    lines += ["", "## 3. Tekrar eden satırlar (kesin)", ""]
-    lines += ["### System prompt'un zaten söylediği", ""]
+    lines += ["", "## 3. Repeated lines (sure)", ""]
+    lines += ["### What the system prompt already says", ""]
     if in_prompt:
-        lines += ["| satır | yerler |", "|---|---|"]
+        lines += ["| line | places |", "|---|---|"]
         for n in in_prompt:
             text = shown[n][:90].replace("|", "/")
             lines.append(f"| {text} | {', '.join(sorted(where[n]))} |")
     else:
-        lines.append("Yok.")
-    lines += ["", "### Aynı cümleleri paylaşan dosyalar", ""]
+        lines.append("None.")
+    lines += ["", "### Files that share sentences", ""]
     if pair_count:
-        lines += ["| dosya A | dosya B | ortak cümle | örnek |", "|---|---|---|---|"]
+        lines += [
+            "| file A | file B | shared sentences | example |",
+            "|---|---|---|---|",
+        ]
         top = sorted(pair_count.items(), key=lambda kv: (-kv[1], kv[0]))
         for (a, b), shared in top[:MAX_PAIRS]:
             example = pair_example[(a, b)][:80].replace("|", "/")
             lines.append(f"| {a} | {b} | {shared} | {example} |")
         if len(top) > MAX_PAIRS:
-            lines += ["", f"+{len(top) - MAX_PAIRS} dosya çifti daha."]
+            lines += ["", f"+{len(top) - MAX_PAIRS} more file pairs."]
     else:
-        lines.append("Yok.")
+        lines.append("None.")
 
     # 4. What could be added.
-    lines += ["", "## 4. Eklenebilecekler (aday)", ""]
+    lines += ["", "## 4. Could be added (candidates)", ""]
     errors: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
     for tool, sid, ts, file in conn.execute(
         "SELECT c.tool, t.session_id, c.ts, t.file FROM content c JOIN threads t"
@@ -357,14 +360,14 @@ def render(
         and len({g[1][:10] for g in got}) >= rules.min_days
     }
     lines += [
-        "### Tekrar eden araç hataları (hook adayı)",
+        "### Recurring tool errors (hook candidates)",
         "",
-        "Hata mesajı ledger'da yok; örnek yerleri oku, makinenin kontrol edebildiği"
-        " bir kalıp varsa hook ya da izin kuralı olur.",
+        "The error message is not in the ledger; read the example places, and if there"
+        " is a pattern a machine can check, it becomes a hook or a permission rule.",
         "",
     ]
     if recurring:
-        lines += ["| araç | hata | oturum | gün | örnek (transcript · zaman) |"]
+        lines += ["| tool | errors | sessions | days | example (transcript · time) |"]
         lines += ["|---|---|---|---|---|"]
         for tool, got in sorted(recurring.items(), key=lambda kv: (-len(kv[1]), kv[0]))[
             :MAX_ROWS
@@ -375,7 +378,7 @@ def render(
                 f" | {len({g[1][:10] for g in got})} | {examples} |"
             )
     else:
-        lines.append("Yok.")
+        lines.append("None.")
     reads: dict[str, list[tuple[str, str]]] = defaultdict(list)
     for target, sid, ts in conn.execute(
         "SELECT c.target, t.session_id, c.ts FROM content c JOIN threads t"
@@ -395,11 +398,11 @@ def render(
     ]
     lines += [
         "",
-        "### Oturumlar arasında tekrar okunan dosyalar (hafıza ya da CLAUDE.md adayı)",
+        "### Files re-read across sessions (memory or CLAUDE.md candidates)",
         "",
     ]
     if again:
-        lines += ["| dosya | oturum | gün | okuma |", "|---|---|---|---|"]
+        lines += ["| file | sessions | days | reads |", "|---|---|---|---|"]
         for target, seen in sorted(
             again, key=lambda tg: (-len({g[0] for g in tg[1]}), -len(tg[1]), tg[0])
         )[:MAX_ROWS]:
@@ -408,7 +411,7 @@ def render(
                 f" | {len({g[1][:10] for g in seen})} | {len(seen)} |"
             )
     else:
-        lines.append("Yok.")
+        lines.append("None.")
     fixes = conn.execute(
         "SELECT t.file, u.ts FROM turns u JOIN threads t ON t.thread_id = u.thread_id"
         " WHERE u.correction = 1 AND t.kind = 'main' AND u.ts >= ?"
@@ -417,10 +420,11 @@ def render(
     ).fetchall()
     lines += [
         "",
-        "### Düzeltmeler (kural adayı)",
+        "### Corrections (rule candidates)",
         "",
-        f'{len(fixes)} düzeltme ("hayır", "yanlış", "dur", "no", "wrong" gibi'
-        " başlayan mesajlar; kaba bir sayım). Okunacak yerler:",
+        _n(len(fixes), "correction", "corrections")
+        + ' (messages starting with a word like "no", "wrong"'
+        ' or "stop", in English or Turkish; a rough count). Places to read:',
         "",
     ]
     lines += [f"- {file} · {ts}" for file, ts in fixes[-20:]]

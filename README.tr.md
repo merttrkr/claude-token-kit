@@ -73,12 +73,14 @@ uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 
 ## Rapor nasıl okunur
 
-- **En üst:** ana rakamlarla iki cümle, sonra her açıya bir satırlık **Özet** tablosu (araç çıktıları, cache, CLAUDE.md, hafıza, araçlar ve MCP, skill'ler, ajanlar, hook'lar; maliyetteki payı en büyük olan önce) ve **İlk adım**.
+Raporun metni İngilizce. `/token-lab:token-lab` onu Claude'a senin dilinde özetletir; başlık adları aşağıda parantez içinde.
+
+- **En üst:** ana rakamlarla iki cümle, sonra her açıya bir satırlık **Özet** (Summary) tablosu (araç çıktıları, cache, CLAUDE.md, hafıza, araçlar ve MCP, skill'ler, ajanlar, hook'lar; maliyetteki payı en büyük olan önce) ve **İlk adım** (First step).
 - **1. bölüm:** her istekte tekrar giden kısım ve payı.
-- **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı. Sonunda **ajan adayları** tablosu var: tekrar eden işler (general-purpose ajanlarda ya da ana oturumun kendisi okuduğu dış sistemlerde) ajan standardına göre ölçülür, tahmini haftalık kazancıyla.
+- **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı. Sonunda **ajan adayları** (Agent candidates) tablosu var: tekrar eden işler (general-purpose ajanlarda ya da ana oturumun kendisi okuduğu dış sistemlerde) ajan standardına göre ölçülür, tahmini haftalık kazancıyla.
   - Maliyet "girdi-eşdeğeri token"dır. Önbellekten okunan token yaklaşık 0.1, önbelleğe yazılan 1.25–2 sayılır (Claude Code'un fiyat oranları).
   - Abonelikte bunun kotaya etkisi ölçülmedi.
-- **"Zaten düzelmiş görünüyor":** son 2 günün oturumlarında artık görünmeyen öğeler. Önerilmez.
+- **"Zaten düzelmiş görünüyor" (already looks fixed):** son 2 günün oturumlarında artık görünmeyen öğeler. Önerilmez.
 - **3. bölüm:** raporun göremedikleri. Oturum başlığı ve compaction istekleri kayıtlara yazılmıyor.
 - **4. bölüm:** en çok taşınan dosyalar. İstersen Claude bunları okuyup gereksiz satırları bulur. Bu kısım model yargısıdır.
 - **5. bölüm:** ajan işleri. Hangi tekrar eden iş isimli bir ajana taşınabilir, hangi ajan kullanılmıyor.

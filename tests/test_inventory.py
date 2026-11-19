@@ -189,7 +189,7 @@ def test_what_could_be_added(setup: tuple[sqlite3.Connection, Path, Path]) -> No
     assert "| 6 | 3 | 3 |" in errors
     reads = next(r for r in added.splitlines() if "/w/notes.md" in r)
     assert "| 3 | 3 |" in reads
-    assert "1 düzeltme" in added
+    assert "1 correction (" in added
     assert json.dumps(PROJECT)[1:-1] in added  # where to read the correction
 
 
@@ -243,7 +243,7 @@ def test_a_slash_command_counts_as_a_skill_use(
     setup: tuple[sqlite3.Connection, Path, Path],
 ) -> None:
     row = next(r for r in section(report(setup), "## 1.").splitlines() if "tidy" in r)
-    assert "1 çağrı" in row
+    assert "1 call " in row
 
 
 def test_the_newest_system_prompt_wins_whatever_the_file_times(tmp_path: Path) -> None:
@@ -289,4 +289,4 @@ def test_an_empty_ledger_says_so(tmp_path: Path) -> None:
     text, pieces = inventory.render(
         create(tmp_path / "e.sqlite"), tmp_path, tmp_path, tmp_path, tmp_path
     )
-    assert "Henüz hiç Claude Code isteği yok" in text and pieces == ""
+    assert "No Claude Code requests yet" in text and pieces == ""

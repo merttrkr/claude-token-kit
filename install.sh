@@ -10,35 +10,35 @@ REPO=https://github.com/merttrkr/claude-token-kit
 PATH="$HOME/.local/bin:$PATH"  # where the uv installer puts uv
 
 if ! command -v claude >/dev/null 2>&1; then
-    echo "Claude Code not found. Install it first / Claude Code bulunamadi, once onu kur: https://claude.com/claude-code"
+    echo "Claude Code not found. Install it first: https://claude.com/claude-code"
     exit 1
 fi
 
 if ! command -v uvx >/dev/null 2>&1; then
-    echo "Installing uv / uv kuruluyor..."
+    echo "Installing uv..."
     curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null
     if ! command -v uvx >/dev/null 2>&1; then
-        echo "uv installed, but this shell cannot see it. Open a new terminal and run the command again. / uv kuruldu ama bu terminal goremiyor; yeni terminal acip komutu tekrar calistirin."
+        echo "uv installed, but this shell cannot see it. Open a new terminal and run the command again."
         exit 1
     fi
 fi
 
 if claude plugin marketplace list 2>&1 | grep -q token-kit; then
-    echo "token-kit marketplace already added; updating / zaten ekli, guncelleniyor..."
+    echo "token-kit marketplace already added; updating..."
     claude plugin marketplace update token-kit >/dev/null
 else
     claude plugin marketplace add "$REPO" >/dev/null
 fi
 
 if claude plugin list 2>&1 | grep -q 'token-lab@token-kit'; then
-    echo "token-lab already installed; updating / zaten kurulu, guncelleniyor..."
+    echo "token-lab already installed; updating..."
     claude plugin update token-lab@token-kit >/dev/null
 else
     claude plugin install token-lab@token-kit >/dev/null
 fi
 
 if ! claude plugin list 2>&1 | grep -q 'token-lab@token-kit'; then
-    echo "Install could not be verified: token-lab is not in claude plugin list. / Kurulum dogrulanamadi."
+    echo "Install could not be verified: token-lab is not in claude plugin list."
     exit 1
 fi
 
@@ -76,12 +76,12 @@ EOF
 )
 
 echo
-echo "Installed. / Kuruldu."
+echo "Installed."
 if [ "$AUTO" = on ]; then
-    echo "Auto-update is on; to turn it off: /plugin > Marketplaces > token-kit. / Otomatik guncelleme acik; kapatmak icin: /plugin > Marketplaces > token-kit."
+    echo "Auto-update is on; to turn it off: /plugin > Marketplaces > token-kit."
 elif [ "$AUTO" = user-off ]; then
-    echo "Auto-update stays off, as you set it; to turn it on: /plugin > Marketplaces > token-kit. / Otomatik guncelleme sizin ayarinizla kapali kaliyor; acmak icin: /plugin > Marketplaces > token-kit."
+    echo "Auto-update stays off, as you set it; to turn it on: /plugin > Marketplaces > token-kit."
 else
-    echo "Could not turn on auto-update; turn it on in /plugin > Marketplaces > token-kit. / Otomatik guncelleme acilamadi; /plugin > Marketplaces > token-kit icinden acin."
+    echo "Could not turn on auto-update; turn it on in /plugin > Marketplaces > token-kit."
 fi
-echo "Restart Claude Code (or type /reload-plugins in an open session), then / Claude Code'u yeniden ac, sonra:  /token-lab:token-lab"
+echo "Restart Claude Code (or type /reload-plugins in an open session), then type /token-lab:token-lab"

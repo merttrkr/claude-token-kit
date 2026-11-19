@@ -1,6 +1,6 @@
 # Writing a subagent
 
-Read this before you create or change an agent in `~/.claude/agents/` or a project's `.claude/agents/`. Input from the report: the "Ajan adayları" table at the end of section 2 (each job measured against the gate below: recurring, reads more than a summary, fixed core tools; from general-purpose agents and from the main session) and section 5: "Recurring generic jobs" (the job, calls, sessions, tools used, model, tool errors), "Generic calls an existing agent covers", "Existing agents" (verdicts) and "Calls by agent" (threads with a tool error).
+Read this before you create or change an agent in `~/.claude/agents/` or a project's `.claude/agents/`. Input from the report: the "Agent candidates" table at the end of section 2 (each job measured against the gate below: recurring, reads more than a summary, fixed core tools; from general-purpose agents and from the main session) and section 5: "Recurring generic jobs" (the job, calls, sessions, tools used, model, tool errors), "Generic calls an existing agent covers", "Existing agents" (verdicts) and "Calls by agent" (threads with a tool error).
 
 ## Gate: should this be an agent at all?
 

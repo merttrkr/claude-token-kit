@@ -190,7 +190,7 @@ def main(argv: list[str] | None = None) -> int:
         def full_report(conn: sqlite3.Connection) -> str:
             return (
                 why.render(conn, args.days, r, catalog)
-                + "\n## 5. Ajan işleri (ayrıntı, İngilizce)\n\n"
+                + "\n## 5. Agent work (detail)\n\n"
                 + agents.render(conn, catalog, refs, args.days, r).split("\n", 1)[1]
             )
 
@@ -198,7 +198,7 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(full_report(ledger.open_ledger(args.db)))
             return 0
         if not args.root.is_dir():
-            print(f"Transcript klasörü yok: {args.root}. Claude Code'u bir kez kullan.")
+            print(f"No transcript folder: {args.root}. Use Claude Code once.")
             return 1
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "ledger.sqlite"
@@ -211,7 +211,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "inventory":
         if not args.root.is_dir():
-            print(f"Transcript klasörü yok: {args.root}. Claude Code'u bir kez kullan.")
+            print(f"No transcript folder: {args.root}. Use Claude Code once.")
             return 1
         out = args.out or Path(tempfile.mkdtemp(prefix="token-lab-"))
         out.mkdir(parents=True, exist_ok=True)

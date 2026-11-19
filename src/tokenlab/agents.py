@@ -336,17 +336,17 @@ class Fit:
             or self.sessions < rules.min_sessions
             or self.days < rules.min_days
         ):
-            return "tekrar etmiyor"
+            return "not recurring"
         # A known saving (main-session work) already counts only what a call read
         # beyond a summary, for as long as main carried it: it decides alone.
         if self.saving is not None:
             if self.saving <= 0 or self.saving < rules.min_weekly_tokens:
-                return "değmez: haftalık kazanç küçük"
+                return "not worth it: small weekly saving"
         elif self.read_chars < rules.agent_read_chars:
-            return "değmez: sonuçlar bir özetten büyük değil"
+            return "not worth it: results are no bigger than a summary"
         if self.scope < rules.scope_share:
-            return "aday, ama araçları dağınık: önce işi böl"
-        return "ajan adayı"
+            return "candidate, but its tools are scattered: split the job first"
+        return "agent candidate"
 
 
 def fit(units: list[Unit], saving: int | None = None) -> Fit:

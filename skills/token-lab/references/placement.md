@@ -53,7 +53,7 @@ Actions on a piece: **delete** (fails questions 1–4), **edit** (vague or long 
 | own skill never used | `skillOverrides` in `settings.json`: `"user-invocable-only"` hides it from Claude but keeps `/name`; `"name-only"` keeps it listed without its description; `"off"` hides it from both. Ask the user which |
 | plugin skill never used | `disable-model-invocation: true` in that skill's frontmatter (lost when the plugin updates), or uninstall the plugin |
 | agent never used | own agent: delete its file; built-in: `permissions.deny` with `Agent(<name>)` |
-| recurring general-purpose job, or an outside system the main session reads itself again and again ("Ajan adayları" table, verdict "ajan adayı") | a named agent, written with `agent.md` |
+| recurring general-purpose job, or an outside system the main session reads itself again and again ("Agent candidates" table, verdict "agent candidate") | a named agent, written with `agent.md` |
 | general-purpose job an existing agent covers | sharpen that agent's `description` so it gets picked (`agent.md`, point 1) |
 | verdict in "Existing agents" (retire, merge, narrow tools, errors) | act on that verdict with `agent.md`; retiring = delete its file after the user's yes |
 | big tool output, the same file read again and again | a step in the skill or rule where those reads happen ("read X with offset/limit"); a CLAUDE.md line only if it passes the questions above |

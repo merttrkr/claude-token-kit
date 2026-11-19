@@ -1,8 +1,8 @@
-# token-lab kurulumu (Windows). Tek komut:
+# token-lab install (Windows). One command:
 #   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/main/install.ps1 | iex
-# Yaptiklari: claude var mi bakar, uv yoksa winget ile kurar, plugin'i ekler ve kurar,
-# token-kit icin otomatik guncellemeyi acar (/plugin > Marketplaces'teki dugmenin yazdigi alan).
-# Zaten kurulu olani gunceller; baska hicbir ayara dokunmaz.
+# What it does: checks for claude, installs uv with winget if missing, adds and installs the plugin,
+# turns on auto-update for token-kit (the field the /plugin > Marketplaces toggle writes).
+# Updates what is already installed; touches no other setting.
 
 $ErrorActionPreference = 'Stop'
 $Repo = 'https://github.com/merttrkr/claude-token-kit'
@@ -13,27 +13,27 @@ function Refresh-Path {
 }
 
 if (-not (Get-Command claude -ErrorAction SilentlyContinue)) {
-    Write-Host 'Claude Code not found. Install it first / Claude Code bulunamadi, once onu kur: https://claude.com/claude-code' -ForegroundColor Red
+    Write-Host 'Claude Code not found. Install it first: https://claude.com/claude-code' -ForegroundColor Red
     return
 }
 
 if (-not (Get-Command uvx -ErrorAction SilentlyContinue)) {
     if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-        Write-Host 'No uv and no winget. Install uv by hand / uv ve winget yok, uv''yi elle kur: https://docs.astral.sh/uv/' -ForegroundColor Red
+        Write-Host 'No uv and no winget. Install uv by hand: https://docs.astral.sh/uv/' -ForegroundColor Red
         return
     }
-    Write-Host 'Installing uv (winget) / uv kuruluyor...'
+    Write-Host 'Installing uv (winget)...'
     winget install --id astral-sh.uv -e --accept-package-agreements --accept-source-agreements --silent | Out-Null
     Refresh-Path
     if (-not (Get-Command uvx -ErrorAction SilentlyContinue)) {
-        Write-Host 'uv installed, but this window cannot see it. Reopen the terminal and run the command again. / uv kuruldu ama bu pencere goremiyor; terminali kapatip acin ve komutu tekrar calistirin.' -ForegroundColor Yellow
+        Write-Host 'uv installed, but this window cannot see it. Reopen the terminal and run the command again.' -ForegroundColor Yellow
         return
     }
 }
 
 $markets = (claude plugin marketplace list 2>&1) -join "`n"
 if ($markets -match 'token-kit') {
-    Write-Host 'token-kit marketplace already added; updating / zaten ekli, guncelleniyor...'
+    Write-Host 'token-kit marketplace already added; updating...'
     claude plugin marketplace update token-kit | Out-Null
 } else {
     claude plugin marketplace add $Repo | Out-Null
@@ -41,14 +41,14 @@ if ($markets -match 'token-kit') {
 
 $plugins = (claude plugin list 2>&1) -join "`n"
 if ($plugins -match 'token-lab@token-kit') {
-    Write-Host 'token-lab already installed; updating / zaten kurulu, guncelleniyor...'
+    Write-Host 'token-lab already installed; updating...'
     claude plugin update token-lab@token-kit | Out-Null
 } else {
     claude plugin install token-lab@token-kit | Out-Null
 }
 
 if (((claude plugin list 2>&1) -join "`n") -notmatch 'token-lab@token-kit') {
-    Write-Host 'Install could not be verified: token-lab is not in claude plugin list. / Kurulum dogrulanamadi.' -ForegroundColor Red
+    Write-Host 'Install could not be verified: token-lab is not in claude plugin list.' -ForegroundColor Red
     return
 }
 
@@ -91,12 +91,12 @@ $auto = & {
 }
 
 Write-Host ''
-Write-Host 'Installed. / Kuruldu.' -ForegroundColor Green
+Write-Host 'Installed.' -ForegroundColor Green
 if ($auto -eq 'on') {
-    Write-Host 'Auto-update is on; to turn it off: /plugin > Marketplaces > token-kit. / Otomatik guncelleme acik; kapatmak icin: /plugin > Marketplaces > token-kit.'
+    Write-Host 'Auto-update is on; to turn it off: /plugin > Marketplaces > token-kit.'
 } elseif ($auto -eq 'user-off') {
-    Write-Host 'Auto-update stays off, as you set it; to turn it on: /plugin > Marketplaces > token-kit. / Otomatik guncelleme sizin ayarinizla kapali kaliyor; acmak icin: /plugin > Marketplaces > token-kit.'
+    Write-Host 'Auto-update stays off, as you set it; to turn it on: /plugin > Marketplaces > token-kit.'
 } else {
-    Write-Host 'Could not turn on auto-update; turn it on in /plugin > Marketplaces > token-kit. / Otomatik guncelleme acilamadi; /plugin > Marketplaces > token-kit icinden acin.' -ForegroundColor Yellow
+    Write-Host 'Could not turn on auto-update; turn it on in /plugin > Marketplaces > token-kit.' -ForegroundColor Yellow
 }
-Write-Host 'Restart Claude Code (or type /reload-plugins in an open session), then / Claude Code''u yeniden ac, sonra:  /token-lab:token-lab'
+Write-Host 'Restart Claude Code (or type /reload-plugins in an open session), then type /token-lab:token-lab'

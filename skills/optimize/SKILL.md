@@ -1,86 +1,88 @@
 ---
 name: optimize
-description: Genel optimizasyon. Kullanıcının yüklenen CLAUDE.md, kural, hafıza, skill ve ajan dosyalarını placement standardına göre satır satır okuyup sil, kısalt, taşı ve ekle önerileri çıkarır; sadece /token-lab:optimize ile çalışır.
+description: Full optimization. Reads the user's loaded CLAUDE.md, rule, memory, skill and agent files line by line against the placement standard and proposes delete, shorten, move and add changes; runs only through /token-lab:optimize.
 disable-model-invocation: true
 ---
 
-# Genel optimizasyon
+# Full optimization
 
-Kullanıcının bağlamına giren her parçayı placement standardına göre okur, satır satır öneri çıkarır ve onayla uygularsın. Rapordan (`/token-lab:token-lab`) farkı: rapor maliyeti ölçer, bu mod satırları okur. Token harcar; kapsamı kullanıcıyla belirlersin. Hiçbir dosyayı kendiliğinden değiştirmezsin.
+You read every piece that enters the user's context against the placement standard, propose changes line by line and apply them with a yes. How this differs from the report (`/token-lab:token-lab`): the report measures cost, this mode reads the lines. It spends tokens; you agree the scope with the user. You never change a file on your own.
 
-## 1. Envanteri çıkar
+Speak the user's language: the inventory and these instructions are in English; translate what you say.
 
-Kullanıcının kural dosyası varsa (`~/.claude/token-lab.toml`) ekle:
+## 1. Build the inventory
+
+If the user has a rules file (`~/.claude/token-lab.toml`), add it:
 
 ```
 uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab inventory [--rules ~/.claude/token-lab.toml]
 ```
 
-- Komut bir klasör yolu yazar. İçindeki `inventory.md`'yi oku; `system-prompt.md`'yi 3. adımda, `pieces.md`'yi (bütün parçalar) kapsam genişlerse kullanırsın.
-- `inventory.md` "Henüz hiç Claude Code isteği yok" diyorsa bunu kullanıcıya söyle ve dur.
-- `uvx` bulunamazsa kullanıcının dilinde "Önce uv'yi kur, sonra Claude'u yeniden aç." de, işletim sistemine göre komutu ver ve dur (Windows: `winget install astral-sh.uv`; macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`).
-- Envanter salt okur ve ağa çıkmaz. Bölümleri:
-  1. **Parçalar:** her parçanın dosyası, boyu, haftalık maliyeti, kullanımı.
-  2. **Eskimiş referanslar:** diskte olmayan yollar. Betik sonucu, kesin.
-  3. **Tekrar eden satırlar:** system prompt'un zaten söylediği cümleler ve aynı cümleleri paylaşan dosya çiftleri. Betik sonucu, kesin.
-  4. **Eklenebilecekler:** tekrar eden araç hataları, oturumlar arasında tekrar okunan dosyalar, düzeltme mesajlarının yerleri. Bunlar aday; kararı okuma verir.
+- The command prints a folder path. Read `inventory.md` in it; you use `system-prompt.md` in step 3, and `pieces.md` (every piece) if the scope widens.
+- If `inventory.md` says "No Claude Code requests yet", tell the user and stop.
+- If `uvx` is not found, say "Install uv first, then reopen Claude." and give the command for the user's OS, then stop (Windows: `winget install astral-sh.uv`; macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`).
+- The inventory only reads and makes no network calls. Its sections:
+  1. **Pieces:** each piece's file, size, weekly cost and use.
+  2. **Stale references:** paths that are not on disk. A script result, sure.
+  3. **Repeated lines:** sentences the system prompt already says, and pairs of files that share sentences. A script result, sure.
+  4. **Could be added:** recurring tool errors, files re-read across sessions, where the corrections are. These are candidates; reading decides.
 
-## 2. Kapsamı belirle
+## 2. Agree the scope
 
-Kullanıcının dilinde, kısa:
+In the user's language, short:
 
-1. Kaç parça var, en pahalı 10'u hangisi (1. bölüm), 2–3. bölümde kaç kesin bulgu, 4. bölümde kaç aday var.
-2. Tahmini maliyet, kabaca ve alt sınır olarak: okunacak parçaların karakteri, artı her okuyucu için `placement.md` ve `system-prompt.md` (ajan sayısı kadar tekrar eder), artı 4. bölüm için transcript kesitleri; toplamı ÷ 4 ≈ token, çıktı ayrıca. Rakamı söyle.
-3. Tek soru, iki parçalı: "En pahalı 10 parça ve kesin bulgularla başlayayım mı? Eklenebilecekler için transcript'lerinden örnek yerleri de okuyayım mı?" Kullanıcı genişletebilir (`pieces.md`'den), daraltabilir ya da transcript okumasını reddedebilir; 4. adımı sadece evet derse yap.
+1. How many pieces there are, which are the 10 most expensive (section 1), how many sure findings sections 2–3 have, how many candidates section 4 has.
+2. The estimated cost, rough and as a lower bound: the characters of the pieces to read, plus `placement.md` and `system-prompt.md` for each reader (repeated once per agent), plus transcript excerpts for section 4; the total ÷ 4 ≈ tokens, output extra. Say the number.
+3. One question in two parts: "Shall I start with the 10 most expensive pieces and the sure findings? For what could be added, shall I also read the example places in your transcripts?" The user may widen the scope (from `pieces.md`), narrow it, or refuse the transcript reading; do step 4 only if they say yes.
 
-Plugin'den gelen parçalar (`~/.claude/plugins/cache/...` altında) plugin güncellenince eski hâline döner. Onlar için düzenleme yerine gizleme ya da kapatma öner ve bunu kullanıcıya söyle.
+Pieces that come from a plugin (under `~/.claude/plugins/cache/...`) go back to their old form when the plugin updates. For them, propose hiding or turning off rather than editing, and tell the user so.
 
-## 3. Oku ve değerlendir
+## 3. Read and judge
 
-Önce `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/placement.md`'yi oku. Sonra kapsamdaki her parça için:
+First read `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/placement.md`. Then, for each piece in scope:
 
-- Dosyayı oku. Her satırı ya da bloğu standarttaki altı soruyla değerlendir; global `~/.claude/CLAUDE.md` için altı koşulu da uygula.
-- "Claude zaten yapıyor mu?" sorusunu `system-prompt.md`'ye bakarak cevapla: aynı şey orada yazıyorsa satır gereksizdir. Orada yoksa kendi bildiğin varsayılana dayanma; "doğrulanamadı" de.
-- Envanterin 2. ve 3. bölümündeki satırları olgu olarak kullan, yeniden tartışma.
-- Kapsamda 3'ten fazla parça varsa okumayı paralel, salt okunur ajanlara böl (parça başına ya da küçük gruplar). Her ajana parçanın yolunu, `placement.md` ve `system-prompt.md` yollarını ve envanterde o dosyaya ait satırları ver. Ajanlar dosya değiştirmez, sadece aşağıdaki tabloyu döndürür.
+- Read the file. Judge each line or block with the standard's six questions; for the global `~/.claude/CLAUDE.md` also apply the six conditions.
+- Answer "Does Claude do this already?" by looking at `system-prompt.md`: if the same thing is written there, the line is needless. If it is not there, do not lean on a default you think you know; say "could not be verified".
+- Use the lines in sections 2 and 3 of the inventory as facts; do not argue them again.
+- If more than 3 pieces are in scope, split the reading across parallel read-only agents (one per piece or small groups). Give each agent the piece's path, the paths of `placement.md` and `system-prompt.md`, and the inventory lines for that file. Agents change no file; they only return the table below.
 
-Okumalar bitince sen, ana oturumda, gelen tabloları birlikte oku: dosyalar arasında birbirini tutmayan kurallar ve aynı şeyi başka sözlerle söyleyen satırlar (betik sadece birebir aynı cümleleri bulur) için bulgu ekle.
+When the readings are done, you, in the main session, read the returned tables together: add findings for rules that contradict each other across files and for lines that say the same thing in other words (the script only finds identical sentences).
 
-Her bulgu için bir satır:
+One row per finding:
 
-| parça:satır | ne | geçemediği soru | eylem (sil / kısalt / taşı / birleştir) | nereye | kesinlik (kesin: betik / yargı: model) |
+| piece:line | what | question it fails | action (delete / shorten / move / merge) | where to | certainty (sure: script / judgment: model) |
 |---|---|---|---|---|---|
 
-## 4. Eklenebilecekleri değerlendir
+## 4. Judge what could be added
 
-- **Tekrar eden araç hataları:** envanterdeki örnek yerleri aç (transcript dosyasında o zamanı ara), hatayı ve onu üreten komutu gör. Makinenin kontrol edebileceği bir kalıp tekrar ediyorsa hook ya da izin kuralı öner (placement tablosundaki hook satırı); değilse doğru yerde tek satırlık bir kural.
-- **Oturumlar arasında tekrar okunan dosyalar:** her oturumda gerekiyorsa hafıza satırı ya da CLAUDE.md'de bir işaret ("X'ten önce Y'yi oku"); sadece belli bir işte gerekiyorsa o işin skill'ine referans.
-- **Düzeltmeler:** listelenen her mesajı transcript'inde, önündeki Claude cevabıyla birlikte oku. Tekrar eden düzeltmeleri grupla ve tetiklendiği en ucuz yere bir kural öner. Tek seferlik olanlara bir şey ekleme.
-- Transcript metnini hiçbir yere kopyalama; sadece öneride kısaca özetle.
+- **Recurring tool errors:** open the example places in the inventory (search the transcript file for that time) and see the error and the command that produced it. If a pattern a machine can check keeps coming back, propose a hook or a permission rule (the hook row of the placement table); otherwise a one-line rule in the right place.
+- **Files re-read across sessions:** if needed in every session, a memory line or a pointer in CLAUDE.md ("read Y before X"); if needed only for one job, a reference in that job's skill.
+- **Corrections:** read each listed message in its transcript together with the Claude answer before it. Group the recurring corrections and propose a rule in the cheapest place where it triggers. Add nothing for one-off ones.
+- Copy no transcript text anywhere; only summarise it briefly in the suggestion.
 
-## 5. Tek liste göster
+## 5. Show one list
 
-- Tüm bulguları tek listede birleştir. Sıra: maliyet etkisi (parçanın haftalık maliyeti × etkilenen satırların payı); eşitlikte kesin bulgular önce.
-- İlk 10'u sade dille göster: ne, neden, nereye gidiyor, etkisi. Teknik terimi bir kelimeyle açıkla.
-- Tek soru: "Birinciyle başlayalım mı?"
+- Merge all findings into one list. Order: cost effect (the piece's weekly cost × the share of lines affected); on a tie, sure findings first.
+- Show the first 10 in plain words: what, why, where it goes, its effect. Explain a technical term in one word.
+- One question: "Shall we start with the first one?"
 
-## 6. Adım adım uygula
+## 6. Apply one at a time
 
-Her seferinde tek öneri, her biri ayrı onayla:
+One suggestion at a time, each with its own yes:
 
-- Önce dokunacağın dosyayı ve tam farkı (diff) göster, onay al.
-- Değiştirmeden önce dosyanın yedeğini aynı klasöre `.bak-token-lab-<YYYYMMDD-HHMMSS>` uzantısıyla al; aynı adda yedek varsa üzerine yazma, yeni ad seç. Yedek, `settings.json`'daki `env` gibi gizli değerleri de taşır: içeriğini ekrana basma, kullanıcıya yalnızca yolunu söyle.
-- `settings.json` için tam dosya farkı gösterme: sadece değişen anahtarın satırlarını göster; `env` ve benzeri değerleri `***` ile maskele.
-- Taşımada önce hedefe ekle, sonra kaynaktan sil; ikisini aynı farkta göster.
-- `settings.json` gibi JSON dosyalarında yalnızca ilgili anahtarı ekle; dosyanın geri kalanına dokunma.
-- Yeni ya da değişen ajan için `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/agent.md`, hafıza için `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/memory.md` kurallarına uy.
-- Madde bitince ya da kullanıcı atlarsa sıradakini öner. Kullanıcı dur derse ya da öneri kalmadıysa dur.
+- First show the file you will touch and the full diff, and get a yes.
+- Before changing, back the file up in the same folder with the suffix `.bak-token-lab-<YYYYMMDD-HHMMSS>`; if a backup with that name exists, do not overwrite it, pick a new name. A backup also carries secrets such as `env` in `settings.json`: do not print it, tell the user only its path.
+- For `settings.json`, do not show the full file diff: show only the lines of the changed key; mask `env` and similar values as `***`.
+- For a move, first add to the target, then delete from the source; show both in the same diff.
+- In JSON files such as `settings.json`, add only the key in question; leave the rest of the file alone.
+- For a new or changed agent follow `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/agent.md`; for memory, `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/memory.md`.
+- When an item is done or the user skips it, offer the next one. Stop if the user says stop or no suggestion is left.
 
-## 7. Bitiş
+## 7. Closing
 
-- Envanter klasörünü sil (system prompt'u ve dosya yollarını taşır) ve kullanıcıya silindiğini söyle.
+- Delete the inventory folder (it holds the system prompt and file paths) and tell the user it is deleted.
 
-Son iki cümle, kullanıcının dilinde:
+The last two sentences, in the user's language:
 
-- "Bir hafta sonra `/token-lab:token-lab` ile raporu yeniden çalıştır; değiştirdiğin parçaların maliyeti düşmüş olmalı."
-- "Sorun ya da öneri: https://github.com/merttrkr/claude-token-kit/issues — konuşma metni, dosya yolu ya da şirket bilgisi yapıştırmayın."
+- "Run the report again with `/token-lab:token-lab` in a week; the cost of the pieces you changed should have dropped."
+- "Problems or ideas: https://github.com/merttrkr/claude-token-kit/issues — do not paste conversation text, file paths or company information."

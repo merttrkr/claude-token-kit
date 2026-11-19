@@ -1,76 +1,78 @@
 ---
 name: token-lab
-description: Token haritası. Kullanıcının kendi Claude Code transcript'lerinden her token'ın nereye gittiğini ve hangilerinin hiç olmaması gerektiğini çıkarır; sadece /token-lab:token-lab ile çalışır.
+description: Token map. From the user's own Claude Code transcripts, finds where every token goes and which ones should not be there at all; runs only through /token-lab:token-lab.
 disable-model-invocation: true
 ---
 
-# Token haritası
+# Token map
 
-Kullanıcının kendi kullanımını ölçen salt okunur bir rapor çalıştırırsın, sonucu sade dille anlatırsın. Hiçbir ayarı kendiliğinden değiştirmezsin.
+You run a read-only report that measures the user's own usage and explain the result in plain words. You never change a setting on your own.
 
-## 1. Raporu çalıştır
+Speak the user's language: the report and these instructions are in English; translate what you say.
 
-Kullanıcının kural dosyası varsa (`~/.claude/token-lab.toml`) ekle:
+## 1. Run the report
+
+If the user has a rules file (`~/.claude/token-lab.toml`), add it:
 
 ```
 uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab why [--rules ~/.claude/token-lab.toml]
 ```
 
-- `uvx` bulunamazsa kullanıcının dilinde "Önce uv'yi kur, sonra Claude'u yeniden aç." de, işletim sistemine göre komutu ver ve dur:
+- If `uvx` is not found, say "Install uv first, then reopen Claude." and give the command for the user's OS, then stop:
   - Windows: `winget install astral-sh.uv`
   - macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`
-- Rapor salt okur: `~/.claude/projects` altındaki transcript'ler, `~/.claude/agents`, `~/.claude/skills` ve transcript'te adı geçen `MEMORY.md` dosyaları. Büyük geçmişte bir dakika kadar sürer.
-- Rapor ağa çıkmaz; yalnızca ilk çalıştırmada `uvx` paketi kurar, gerekirse Python indirir.
-- Çıktının tamamını sohbete yapıştırma; okuyup özetle.
+- The report only reads: the transcripts under `~/.claude/projects`, `~/.claude/agents`, `~/.claude/skills` and the `MEMORY.md` files the transcripts name. On a long history it takes about a minute.
+- The report makes no network calls; only the first run lets `uvx` install the package and, if needed, download Python.
+- Do not paste the whole output into the chat; read it and summarise.
 
-## 2. İlk görünüm: kısa ve her açı
+## 2. First view: short, every angle
 
-Kullanıcının dilinde, teknik olmayan biri anlayacak şekilde. Raporun "Özet" ve "İlk adım" bölümleri bunun için yazıldı:
+For someone who is not technical. The report's "Summary" and "First step" sections are written for this:
 
-1. Raporun en üstteki iki kalın cümlesini rakamlarıyla söyle.
-2. "Özet" tablosundaki her açı için tek satır, tablodaki sırayla: ne bulundu, maliyetteki payı, ne yapılır. "sorun yok" olanları sonda tek satırda topla. Teknik terimi bir kelimeyle açıkla (ör. önbellek, bağlam).
-3. Ajanlar satırında general-purpose payını (ve varsa son günlerin trendini) söyle. 2. bölüm sonundaki "Ajan adayları" tablosundan hükmü "ajan adayı" olan işleri ve nerede çalıştıklarını (ana oturum ya da general-purpose) adıyla ver. 5. bölümden: "Recurring generic jobs" tablosundaki en büyük yeni ajan adayını, "Generic calls an existing agent covers" tablosundan mevcut bir ajanın kaçırdığı en büyük işi, "Existing agents" tablosundan bir hüküm (emekli et, birleştir, araçları daralt) varsa onu adıyla ver.
-4. Cache ve hook satırları gözlemdir; kesin bir kazanç vaat etme.
-5. Maliyetin "girdi-eşdeğeri token" olduğunu, abonelikte kotaya etkisinin ölçülmediğini bir kez belirt.
-6. Raporun ölçemediğini tek cümleyle söyle: dosyaların içeriği (gereksiz, eskimiş ya da yanlış yerdeki satırlar) ve eksikler (hook, hafıza satırı, kural). Bunlara rapor maddelerinden sonra genel optimizasyonla bakılabilir; token harcar.
-7. Sonda "İlk adım"ı söyle ve tek soru sor: "Bununla başlayalım mı?"
+1. Say the two bold sentences at the top of the report, with their numbers.
+2. One line per angle of the "Summary" table, in the table's order: what was found, its share of cost, what to do. Group the "no issue" angles into one line at the end. Explain a technical term in one word (e.g. cache, context).
+3. In the Agents line, say the general-purpose share (and the trend of the last days, if shown). From the "Agent candidates" table at the end of section 2, name the jobs whose verdict is "agent candidate" and where they run (main session or general-purpose). From section 5: name the largest new candidate in "Recurring generic jobs", the largest job an existing agent missed in "Generic calls an existing agent covers", and any verdict other than "keep" in "Existing agents" (e.g. retire, merge, check grants, tighten contract).
+4. The Cache and Hooks lines are observations; do not promise a sure saving.
+5. Say once that cost is "input-equivalent tokens" and that the effect on a subscription quota is not measured.
+6. Say in one sentence what the report cannot measure: what is inside the files (needless, stale or misplaced lines) and what is missing (a hook, a memory line, a rule). A full optimization can look at these after the report items; it spends tokens.
+7. End with the "First step" and one question: "Shall we start with this?"
 
-Çıktının tamamını sohbete yapıştırma; tabloları kullanıcı isterse aç.
+Do not paste the whole output; open a table only if the user asks.
 
-## 3. Adım adım ilerlet
+## 3. One step at a time
 
-Her seferinde tek madde:
+One item at a time:
 
-- Kullanıcı evet derse önce hedefi göster: hangi dosya ya da ayar, rapordaki kanıt, maliyetteki payı.
-- Madde bitince ya da kullanıcı atlarsa, payı en büyük sıradaki maddeyi öner ve yine tek soru sor.
-- Kesilebilir madde kalmadıysa ya da kullanıcı kalanları atlarsa tek soru sor: "Şimdi dosyaları satır satır okuyan genel optimizasyona geçeyim mi? Token harcar; kapsamı birlikte belirleriz." Evet derse 4. adımın son paragrafına geç.
-- Kullanıcı dur derse ya da optimizasyonu istemezse 5. adıma geç.
+- If the user says yes, first show the target: which file or setting, the evidence in the report, its share of cost.
+- When an item is done or the user skips it, offer the next item with the largest share and ask one question again.
+- When no item that can be cut is left, or the user skips the rest, ask one question: "Shall I go on to the full optimization that reads your files line by line? It spends tokens; we agree the scope together." If yes, go to the last paragraph of step 4.
+- If the user says stop or does not want the optimization, go to step 5.
 
-Bir dosyayı ya da ayarı değiştirmeden önce ilgili standardı oku ve ona göre yaz:
+Before you change a file or a setting, read the standard that applies and write by it:
 
-- Her değişiklikte: `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/placement.md`. Bir satırın ya da kuralın nereye gideceğine karar tablosu ve "rapor bulgusu → yer" tablosuyla karar ver.
-- Yeni ya da değişen ajan: `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/agent.md`. 5. bölümdeki adayın araç ve model sütunlarını kullan.
-- Hafıza dosyası ya da `MEMORY.md`: `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/memory.md`.
+- Every change: `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/placement.md`. Decide where a line or rule goes with its decision table and its "Report finding → usual place" table.
+- A new or changed agent: `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/agent.md`. Use the tool and model columns of the candidate in section 5.
+- A memory file or `MEMORY.md`: `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/memory.md`.
 
-Değiştirirken:
+While changing:
 
-- Önce dokunacağın dosyayı ve tam farkı (diff) göster, onay al.
-- Değiştirmeden önce dosyanın yedeğini aynı klasöre `.bak-token-lab-<YYYYMMDD-HHMMSS>` uzantısıyla al; aynı adda yedek varsa üzerine yazma. Yedek, `settings.json`'daki `env` gibi gizli değerleri de taşır: içeriğini ekrana basma, kullanıcıya yalnızca yolunu söyle.
-- `settings.json` gibi JSON dosyalarında yalnızca ilgili anahtarı ekle; dosyanın geri kalanına dokunma. Farkta sadece değişen anahtarın satırlarını göster, `env` değerlerini `***` ile maskele.
-- Plugin skill'lerini gizlemek için `skillOverrides` işlemez; o skill'in `SKILL.md` frontmatter'ına `disable-model-invocation: true` eklenir ve plugin güncellenince yeniden gerekir. Bunu kullanıcıya söyle.
-- Hiçbir maddeyi kendiliğinden uygulama; her biri ayrı onay ister.
+- First show the file you will touch and the full diff, and get a yes.
+- Before changing, back the file up in the same folder with the suffix `.bak-token-lab-<YYYYMMDD-HHMMSS>`; never overwrite an existing backup. A backup also carries secrets such as `env` in `settings.json`: do not print it, tell the user only its path.
+- In JSON files such as `settings.json`, add only the key in question; leave the rest of the file alone. In the diff, show only the lines of the changed key and mask `env` values as `***`.
+- `skillOverrides` does not hide a plugin's skills; add `disable-model-invocation: true` to that skill's `SKILL.md` frontmatter instead, and it is needed again after the plugin updates. Tell the user this.
+- Never apply an item on your own; each one needs its own yes.
 
-## 4. İsteğe bağlı: dosya okuması
+## 4. Optional: reading files
 
-Raporun 4. bölümündeki dosyaları kullanıcı isterse oku. Her satırı `references/placement.md`'deki altı soruyla değerlendir; global `~/.claude/CLAUDE.md` için altı koşulu da uygula. Her öneriyi satır numarası ve eylemle ver (sil, kısalt, taşı: nereye).
+If the user wants, read the files in section 4 of the report. Judge every line with the six questions in `references/placement.md`; for the global `~/.claude/CLAUDE.md` also apply the six conditions. Give each suggestion with its line number and action (delete, shorten, move: where).
 
-Bu kısım model yargısıdır; kullanıcıya öyle söyle. Silme ya da taşıma önerilerini 3. adımdaki gibi onayla uygula.
+This part is model judgment; tell the user so. Apply deletes or moves with a yes, as in step 3.
 
-Genel optimizasyon: kullanıcı 3. adımın sonundaki soruya evet derse ya da herhangi bir anda bütün parçaların (CLAUDE.md, kurallar, hafıza, skill'ler, ajanlar) satır satır incelenmesini, eksiklerin (hook, hafıza, kural) de önerilmesini isterse, `${CLAUDE_PLUGIN_ROOT}/skills/optimize/SKILL.md`'yi oku ve 1. adımından başlayarak uygula. O skill kendiliğinden çağrılamaz; dosyasını okuyup adımlarını bu oturumda yürütürsün, kullanıcının `/token-lab:optimize` yazmasına gerek yok. Bitişte onun 7. adımı geçerli; bu skill'in 5. adımındaki satırı tekrar etme.
+Full optimization: when the user says yes to the question at the end of step 3, or at any point asks for every piece (CLAUDE.md, rules, memory, skills, agents) to be reviewed line by line and for what is missing (hook, memory, rule) to be suggested, read `${CLAUDE_PLUGIN_ROOT}/skills/optimize/SKILL.md` and follow it from its step 1. That skill cannot be invoked on its own; you read its file and run its steps in this session, and the user does not need to type `/token-lab:optimize`. Its step 7 closes the session; do not repeat the lines of step 5 here.
 
-## 5. Bitiş
+## 5. Closing
 
-Son iki cümle, kullanıcının dilinde, bu sırayla:
+The last two sentences, in the user's language, in this order:
 
-- "Bir hafta sonra `/token-lab:token-lab` ile yeniden çalıştır; uyguladıklarının payı düşmüş olmalı."
-- "Sorun ya da öneri: https://github.com/merttrkr/claude-token-kit/issues — konuşma metni, dosya yolu ya da şirket bilgisi yapıştırmayın."
+- "Run `/token-lab:token-lab` again in a week; the share of what you applied should have dropped."
+- "Problems or ideas: https://github.com/merttrkr/claude-token-kit/issues — do not paste conversation text, file paths or company information."
