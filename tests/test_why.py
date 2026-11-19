@@ -729,3 +729,35 @@ def test_implausible_or_foreign_history_lines_are_skipped(tmp_path: Path) -> Non
     lines = [json.dumps(h) for h in [good, *bad]]
     hist.write_text("\n".join(lines) + "\n", encoding="utf-8")
     assert len(load_history(hist, "abc")) == 1
+
+
+def test_a_short_history_says_its_numbers_are_rough(conn: sqlite3.Connection) -> None:
+    text = why.render(conn, 30, LOW)
+    top = text.split("## Summary", 1)[0]
+    assert "**Only 1 day of history" in top
+    assert "token-lab " in text.splitlines()[0]
+    # Findings name the days the data covers, not the 30 asked for.
+    assert "in 30 days" not in text and "in 1 day" in text
+
+
+def test_the_report_names_the_file_review_as_the_next_step(
+    conn: sqlite3.Connection,
+) -> None:
+    first = why.render(conn, 30, LOW).split("## First step", 1)[1].split("## 1.", 1)[0]
+    assert "**Next:** `/token-lab:optimize`" in first
+
+
+def test_an_empty_history_prints_only_the_empty_message(tmp_path: Path) -> None:
+    import contextlib
+    import io
+
+    from tokenlab.cli import main
+
+    root = tmp_path / "projects"
+    root.mkdir()
+    out = io.StringIO()
+    with contextlib.redirect_stdout(out):
+        assert main(["why", "--root", str(root), "--no-history"]) == 0
+    assert out.getvalue() == (
+        "No Claude Code requests yet: try again after a few sessions.\n"
+    )

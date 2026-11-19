@@ -2,70 +2,72 @@
 
 **English** · [Türkçe](README.tr.md)
 
-> **Trial version (0.2).** Works on Windows, macOS and Linux. Tested on Windows and Linux so far (not yet on macOS), with data from a few people. If you see a problem or an odd result, post it on the [Issues](https://github.com/merttrkr/claude-token-kit/issues) page.
+See where your Claude Code tokens go, and cut the ones you do not need. token-lab reads your own Claude Code history on your computer and shows, in plain numbers, what Claude re-reads with every message, what is never used and what to change. Then it goes through your instruction files with you and changes them only after your yes.
 
-Claude Code sends the model a lot with every request: tool definitions, skill and agent lists, CLAUDE.md, memory files, earlier tool output. This tool looks at **your own** conversation logs and answers two questions:
+> **Trial version (0.2).** Works on Windows, macOS and Linux; tried by a few people on their own computers. Problems or odd results: [Issues](https://github.com/merttrkr/claude-token-kit/issues).
 
-1. Where do my tokens go?
-2. Which of them should not be there at all?
+What it finds, for example:
 
-Example findings:
+- "41 skills are listed in every message and you used 3: 4 thousand tokens each time."
+- "9 tools of one connected service (MCP) were never used in 30 days."
+- "After long breaks, Claude re-read the whole conversation from scratch 277 times."
+- "One file was read from the start 22 times in one session."
 
-- "41 skills in the list, 3 were used; 4k tokens on every request."
-- "9 tools of one MCP server were never called in 30 days."
-- "The cache went cold 277 times: after a long pause the whole context was written again."
-- "One file was read from the start 22 times in the same session."
-
-Each finding shows what it cost, the evidence, and a one-sentence fix.
+Each finding shows what it costs, the evidence and a one-sentence fix. Numbers are tokens, not money: how they count against a subscription's limits is not measured.
 
 ## Safety
 
-- **The report is read-only.** It changes no setting and none of your files. Its one write is its own history, `~/.claude/token-lab/history.jsonl`: a line of numbers per run (no names, paths or text) for the trend at the top of the next report. Turn it off with `--no-history`; delete the file to forget it. `/token-lab:optimize` changes a file only after you see the diff and say yes. The report reads:
-  - the logs under `~/.claude/projects`
-  - `~/.claude/agents` and `~/.claude/skills`
-  - the memory indexes (`MEMORY.md`) named in the logs
-- **The tool sends nothing.** It makes no network calls; only the first run installs the `uv` package and, if needed, downloads Python. When you run it through `/token-lab:token-lab` or `/token-lab:optimize`, Claude reads the report (and, in optimize, the files under review) like any file in your session, so it goes wherever your Claude conversation goes.
-- **Leaves nothing running.** No hook, no background program, no scheduled task.
-- If you want to apply a finding, tell Claude; it shows the file and the diff and applies it only after you say yes.
+- **Reads only on your computer:** your Claude Code history under `~/.claude/projects`, `~/.claude/agents`, `~/.claude/skills` and the memory indexes (`MEMORY.md`) the history names.
+- **Sends nothing.** token-lab itself makes no network calls. Downloads happen only when you install (`uv`) and on the first run (token-lab itself and, if needed, Python). Inside Claude Code, Claude reads the report like any file in your conversation, so the report goes where your Claude conversation goes.
+- **Changes nothing without your yes.** Your settings, CLAUDE.md, memory, skills and agents change only after you see the change and say yes; a backup is kept next to the file (`.bak-token-lab-…`).
+- **Its own files:** one line of numbers per run in `~/.claude/token-lab/history.jsonl` for the trend (no names, paths or text; `--no-history` turns it off), and temporary files it deletes. The full list is in [SECURITY.md](SECURITY.md).
+- **Leaves nothing running:** no hook, no background program, no scheduled task.
 
-## Install
+## Install (about 5 minutes)
 
-Easiest: give Claude Code the link to this page and say **"install this"**. Or one command.
+1. **Open a terminal window** (not Claude Code):
+   - Windows: press Start, type **PowerShell**, open it.
+   - macOS: press Cmd+Space, type **Terminal**, open it.
+2. **Paste this command and press Enter.**
 
-Windows (PowerShell):
+   Windows:
 
-```powershell
-irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.ps1 | iex
-```
+   ```powershell
+   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex
+   ```
 
-macOS / Linux:
+   macOS / Linux:
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.sh | sh
-```
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh
+   ```
 
-[`install.ps1`](install.ps1) and [`install.sh`](install.sh) only do this: check that Claude Code is installed, install `uv` if missing (`winget` on Windows, uv's own installer on macOS/Linux), then add and install this plugin, and turn on auto-update for it (the same switch as `/plugin` → Marketplaces → token-kit) unless you turned it off before. It touches no other setting; it is short, so you can read it.
+3. **Wait for "Installed."** The first time takes 1–3 minutes. If anything else appears, the message says what to do.
+4. **Close Claude Code completely** (every window) and open it again.
+5. **In Claude Code, type `/token-lab:token-lab`** and press Enter. Claude asks to run a command: choose **Yes**. The report takes about a minute; then Claude explains it and offers to go through your files.
 
-Then restart Claude Code and type `/token-lab:token-lab`.
+What the install does: checks that Claude Code is there, installs `uv` (a small tool token-lab runs on) if it is missing, adds token-lab to Claude Code and turns on its automatic updates. Nothing else; the scripts are short: [`install.ps1`](install.ps1), [`install.sh`](install.sh).
 
-**Updates:** with auto-update on, Claude Code fetches a new version by itself within a few minutes of a session's start and says "Plugin updated · Run /reload-plugins". To update now, run the install command again. To turn auto-update off: `/plugin` → Marketplaces → token-kit.
+You can also give Claude Code the link to this page and say **"install token-lab"**; then do steps 4 and 5.
 
-> **Install steps for Claude** (if the user asked you to install this repo):
-> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.sh | sh`
-> 2. If the output has no "Installed", tell the user the error exactly as printed and stop.
-> 3. Tell the user: "Installed. Type `/reload-plugins` in this session or restart Claude, then type `/token-lab:token-lab`."
+**Updates** arrive by themselves a few minutes after you start Claude Code, which then says "Plugin updated · Run /reload-plugins": type `/reload-plugins`. To update right away, paste the install command again. To see your version: in Claude Code type `/plugin` and open **Installed**; the report also shows it in its first line.
+
+> **For Claude Code, when a user asks it to install token-lab:**
+> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh`
+> 2. If the output has no "Installed", tell the user the message exactly as printed and stop.
+> 3. Tell the user: "Installed. Close Claude Code completely, open it again, then type `/token-lab:token-lab`."
 > 4. Change no setting other than the install.
 
-To install by hand: first [uv](https://docs.astral.sh/uv/) (Windows: `winget install astral-sh.uv`; macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`), then from Claude Code:
+**Install by hand,** in the same terminal window (not in Claude Code): install [uv](https://docs.astral.sh/uv/) (Windows: `winget install astral-sh.uv`; macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`), close and reopen the window, then:
 
 ```
 claude plugin marketplace add https://github.com/merttrkr/claude-token-kit
 claude plugin install token-lab@token-kit
 ```
 
-Then type `/token-lab:token-lab` in Claude. For auto-update, turn it on in `/plugin` → Marketplaces → token-kit.
+Then steps 4 and 5. Automatic updates: in Claude Code type `/plugin`, open Marketplaces, choose token-kit.
 
-To only see the report, without installing:
+**Only the report, without installing** (needs `uv` and `git`):
 
 ```
 uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
@@ -91,13 +93,13 @@ How far back can the report look? Claude Code deletes old logs based on the `cle
 
 **Did a change help?** `uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why --until 2026-11-10` builds the report from the transcripts up to the start of that day (UTC); files on disk (memory, agents, skills) are read as they are now. Compare its Summary with today's; or ask Claude in `/token-lab:token-lab` to compare before and after a date.
 
-## Full optimization: `/token-lab:optimize`
+## File review: `/token-lab:optimize`
 
-The report measures; this mode reads. Claude goes through every piece that enters your context (CLAUDE.md files, rules, memory, skills, agents), most expensive first, against the placement standard, and proposes for each line: delete, shorten, move (and where) or merge. It also proposes what to add: a hook for a tool error that keeps coming back, a memory line for a file you read in every session, a rule for a correction you keep making.
+The report measures; this review reads. Claude goes through the files that enter your context (CLAUDE.md files, rules, memory, skills, agents), the 10 most expensive first (you can widen it), against the placement standard, and proposes for each line: delete, shorten, move (and where) or merge. It also proposes what to add: a hook for a tool error that keeps coming back, a memory line for a file you read in every session, a rule for a correction you keep making.
 
 - A script first lists what it can check for sure: paths that no longer exist, sentences the system prompt already says, files that share the same lines.
-- The report offers it once its own items are done; you can also start it directly.
-- It spends tokens: Claude tells you the estimate and asks how many pieces to read.
+- The report leads into it: after the summary Claude offers to go on with your files. You can also start it directly.
+- Claude asks which files to start with and whether to look at your past conversations for what to add.
 - Changes are applied one at a time, each with a diff, a backup and your yes.
 
 ## Your own rules
@@ -122,12 +124,18 @@ For a problem or an idea, use this repo's **Issues** page. Don't paste conversat
 
 ## Uninstall
 
+In a terminal window (not in Claude Code):
+
 ```
 claude plugin uninstall token-lab@token-kit
 claude plugin marketplace remove token-kit
 ```
 
-What stays: the report's history, `~/.claude/token-lab/history.jsonl` (delete the `~/.claude/token-lab` folder), and `uv` with its cache (Python and packages; remove them with `uv cache clean` if you want).
+What stays, if you want it gone too:
+
+- The report's history: delete the folder `~/.claude/token-lab`.
+- Backups the file review made next to changed files: `*.bak-token-lab-*`.
+- `uv`, with the Python and packages it downloaded: `uv cache clean`, then remove uv itself (Windows: `winget uninstall astral-sh.uv`; macOS/Linux: see [uv's docs](https://docs.astral.sh/uv/getting-started/installation/#uninstallation)).
 
 ## Development
 

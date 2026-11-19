@@ -9,39 +9,64 @@ set -eu
 REPO=https://github.com/merttrkr/claude-token-kit
 PATH="$HOME/.local/bin:$PATH"  # where the uv installer puts uv
 
+# Runs `claude <args>`; on failure prints what claude said, so the user sees why.
+run_claude() {
+    if ! said=$(claude "$@" 2>&1); then
+        [ -n "$said" ] && printf '%s\n' "$said"
+        return 1
+    fi
+}
+
 if ! command -v claude >/dev/null 2>&1; then
-    echo "Claude Code not found. Install it first: https://claude.com/claude-code"
+    echo "Claude Code is not installed (or this window cannot find it)."
+    echo "Install it from https://claude.com/claude-code, open a new Terminal window, and paste the install command again."
     exit 1
 fi
 
 if ! command -v uvx >/dev/null 2>&1; then
-    echo "Installing uv..."
-    curl -LsSf https://astral.sh/uv/install.sh | sh >/dev/null
+    echo "Installing uv, a small tool token-lab runs on (about a minute)..."
+    if ! uv_script=$(curl -LsSf https://astral.sh/uv/install.sh); then
+        echo "Could not download uv. Check the internet connection and paste the install command again."
+        exit 1
+    fi
+    if ! printf '%s\n' "$uv_script" | sh >/dev/null; then
+        echo "Could not install uv (message above). Install it from https://docs.astral.sh/uv/getting-started/installation/ and paste the install command again."
+        exit 1
+    fi
     if ! command -v uvx >/dev/null 2>&1; then
-        echo "uv installed, but this shell cannot see it. Open a new terminal and run the command again."
+        echo "uv is installed, but this window cannot see it yet."
+        echo "Close this Terminal window, open a new one, and paste the install command again."
         exit 1
     fi
 fi
 
+echo "Adding token-lab to Claude Code..."
 if claude plugin marketplace list 2>&1 | grep -q token-kit; then
-    echo "token-kit marketplace already added; updating..."
-    claude plugin marketplace update token-kit >/dev/null
+    ok=0; run_claude plugin marketplace update token-kit || ok=1
 else
-    claude plugin marketplace add "$REPO" >/dev/null
+    ok=0; run_claude plugin marketplace add "$REPO" || ok=1
 fi
-
-if claude plugin list 2>&1 | grep -q 'token-lab@token-kit'; then
-    echo "token-lab already installed; updating..."
-    claude plugin update token-lab@token-kit >/dev/null
-else
-    claude plugin install token-lab@token-kit >/dev/null
-fi
-
-if ! claude plugin list 2>&1 | grep -q 'token-lab@token-kit'; then
-    echo "Install could not be verified: token-lab is not in claude plugin list."
+if [ "$ok" -ne 0 ]; then
+    echo "Could not reach the token-lab catalog on GitHub (message above). Check the internet connection and paste the install command again."
     exit 1
 fi
 
+if claude plugin list 2>&1 | grep -q 'token-lab@token-kit'; then
+    ok=0; run_claude plugin update token-lab@token-kit || ok=1
+else
+    ok=0; run_claude plugin install token-lab@token-kit || ok=1
+fi
+if [ "$ok" -ne 0 ]; then
+    echo "Could not install token-lab (message above). Paste the install command again; if it fails twice, open an issue on GitHub."
+    exit 1
+fi
+
+if ! claude plugin list 2>&1 | grep -q 'token-lab@token-kit'; then
+    echo "Install could not be confirmed: Claude Code does not list token-lab. Paste the install command again."
+    exit 1
+fi
+
+echo "Checking the version and turning on automatic updates (the first time this may download Python; up to a minute)..."
 # An update that failed leaves the old version listed: compare with the marketplace.
 CONFIG="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
 MANIFEST="$CONFIG/plugins/marketplaces/token-kit/.claude-plugin/marketplace.json"
@@ -61,7 +86,8 @@ EOF
 )
 set -- $VERSIONS
 if [ $# -eq 2 ] && [ "$1" != "$2" ]; then
-    echo "Update did not finish: version $1 is installed, $2 is the latest. Run: claude plugin update token-lab@token-kit"
+    echo "The update did not finish: version $1 is installed, $2 is the latest."
+    echo "Paste the install command again in this window."
     exit 1
 fi
 
@@ -101,10 +127,11 @@ EOF
 echo
 echo "Installed."
 if [ "$AUTO" = on ]; then
-    echo "Auto-update is on; to turn it off: /plugin > Marketplaces > token-kit."
+    echo "Updates arrive by themselves. (To turn that off: in Claude Code type /plugin, open Marketplaces, choose token-kit.)"
 elif [ "$AUTO" = user-off ]; then
-    echo "Auto-update stays off, as you set it; to turn it on: /plugin > Marketplaces > token-kit."
+    echo "Automatic updates stay off, as you set them. (To turn them on: in Claude Code type /plugin, open Marketplaces, choose token-kit.)"
 else
-    echo "Could not turn on auto-update; turn it on in /plugin > Marketplaces > token-kit."
+    echo "Automatic updates could not be turned on. To turn them on: in Claude Code type /plugin, open Marketplaces, choose token-kit."
 fi
-echo "Restart Claude Code (or type /reload-plugins in an open session), then type /token-lab:token-lab"
+echo
+echo "Next: close Claude Code completely (every window), open it again, and type:  /token-lab:token-lab"

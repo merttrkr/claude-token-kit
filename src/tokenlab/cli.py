@@ -334,8 +334,9 @@ def main(argv: list[str] | None = None) -> int:
         def full_report(conn: sqlite3.Connection) -> str:
             now: dict[str, Any] = {}
             text = why.render(conn, args.days, r, catalog, history=history, out=now)
-            if now:
-                new.append({**now, "root": here, "version": VERSION})
+            if not now:
+                return text  # no requests yet: nothing else to say
+            new.append({**now, "root": here, "version": VERSION})
             return (
                 text
                 + "\n## 5. Agent work (detail)\n\n"
@@ -349,7 +350,10 @@ def main(argv: list[str] | None = None) -> int:
             sys.stdout.write(full_report(ledger.open_ledger(args.db)))
             return 0
         if not args.root.is_dir():
-            print(f"No transcript folder: {args.root}. Use Claude Code once.")
+            print(
+                f"No Claude Code history found in {args.root}. Use Claude Code for a"
+                " few sessions, then run this again."
+            )
             return 1
         with tempfile.TemporaryDirectory() as tmp:
             db = Path(tmp) / "ledger.sqlite"
@@ -379,7 +383,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if args.command == "inventory":
         if not args.root.is_dir():
-            print(f"No transcript folder: {args.root}. Use Claude Code once.")
+            print(
+                f"No Claude Code history found in {args.root}. Use Claude Code for a"
+                " few sessions, then run this again."
+            )
             return 1
         if args.out is None:
             prune_inventories(Path(tempfile.gettempdir()), time.time())

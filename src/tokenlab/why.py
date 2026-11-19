@@ -16,6 +16,7 @@ from bisect import bisect_left, bisect_right
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from importlib.metadata import version
 from pathlib import Path
 from statistics import median
 from typing import Any
@@ -269,6 +270,7 @@ def _coverage(conn: sqlite3.Connection, start: str, end: str) -> str:
     )
 
 
+SHORT_HISTORY_DAYS = 7  # under this, the report says its numbers are rough
 TREND_BACK_DAYS = 28  # the oldest column: the run closest to this far back
 
 
@@ -356,6 +358,7 @@ def render(
         1.0, (datetime.fromisoformat(end) - datetime.fromisoformat(start)).days + 1.0
     )
     week = 7.0 / span
+    seen = min(days, int(span))  # the days the findings really cover
     ratio = tokens_per_char(conn)
     tpc = ratio or 0.25
     carry = Carry(conn, start)
@@ -507,7 +510,7 @@ def render(
                 "T",
                 chars,
                 wpart[(kind, name)],
-                f"tool `{name}` was never called in {days} days",
+                f"tool `{name}` was never called in {_n(seen, 'day', 'days')}",
                 "its definition is sent with every request",
                 "if you do not use it, add it to `permissions.deny`",
             )
@@ -557,7 +560,7 @@ def render(
                 "S" if kind == "skill" else "A",
                 raw[owner],
                 cost[owner],
-                f"{who} listed but never used in {days} days",
+                f"{who} listed but never used in {_n(seen, 'day', 'days')}",
                 _names(sorted(names)),
                 fix_plugin if owner else fix_own,
             )
@@ -603,7 +606,7 @@ def render(
                     "memory index line points",
                     "memory index lines point",
                 )
-                + f" to files never read with Read in {days} days",
+                + f" to files never read with Read in {_n(seen, 'day', 'days')}",
                 "archive them or group them under a one-line summary",
             ),
             (
@@ -644,7 +647,7 @@ def render(
                 sum(written.values()),
                 f"{_n(len(written), 'memory file was', 'memory files were')}"
                 " written but never read with Read"
-                f" in {days} days",
+                f" in {_n(seen, 'day', 'days')}",
                 _names(sorted(Path(w).name for w in written), 5),
                 "check if it is really needed; if not, narrow the rule that writes it",
             )
@@ -1004,8 +1007,17 @@ def render(
     if out is not None:
         out.update(numbers)
     lines = [
-        f"# Token map — last {int(span)} days ({start[:10]} → {end[:10]})",
+        f"# Token map — last {_n(int(span), 'day', 'days')}"
+        f" ({start[:10]} → {end[:10]}) · token-lab {version('tokenlab')}",
         "",
+        *(
+            [
+                f"**Only {_n(int(span), 'day', 'days')} of history: the numbers are"
+                " rough. Run the report again after a week of use.**"
+            ]
+            if span < SHORT_HISTORY_DAYS
+            else []
+        ),
         f"**The same fixed part is sent again with every request: about"
         f" {_human(per_request)} tokens per request,"
         f" {_share(tok(total_carried), prompt)} of what is sent.**",
@@ -1042,8 +1054,15 @@ def render(
         )
     else:
         lines.append(
-            "Nothing cuttable found; try having Claude read the files in section 4."
+            "Nothing cuttable found in the numbers; the files themselves may still"
+            " hold lines to cut (see Next)."
         )
+    lines += [
+        "",
+        "**Next:** `/token-lab:optimize` goes through your most expensive files"
+        " (CLAUDE.md, rules, memory, skills, agents) and suggests what to cut, move"
+        " or add (a hook, a rule, a memory line); each change only after your yes.",
+    ]
     lines += [
         "",
         "## 1. The fixed part sent again and again",

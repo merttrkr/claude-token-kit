@@ -2,6 +2,15 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.2.5 — 2026-11-19
+
+For a first-time, non-technical user:
+
+- README: what it is in one sentence; install as five numbered steps (which window to open, what to paste, close and reopen Claude Code); safety in plain words; uninstall says where to type and what stays.
+- Installers: every message says what to do and where; long steps say how long; a failed `claude` command shows its own message; the end says to close Claude Code completely and open it again.
+- The report says when it has under a week of history ("the numbers are rough"), names the days its findings really cover, shows the token-lab version in its first line, and ends its First step with the file review (`/token-lab:optimize`). With no history it prints only that.
+- The report skill tells the user about the wait and the permission prompt before running, keeps the first view to the top three angles in everyday words, and goes on to the file review. No more "it spends tokens" warnings; the file review is described as it works (the most expensive files first).
+
 ## 0.2.4 — 2026-11-19
 
 - A **Trend** table at the top of the report: the fixed part per request, the cuttable waste and each angle's share of cost, against the last run and a run about a month back.

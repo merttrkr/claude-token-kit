@@ -2,70 +2,72 @@
 
 [English](README.md) · **Türkçe**
 
-> **Deneme sürümü (0.2).** Windows, macOS ve Linux'ta çalışır. Şimdilik Windows ve Linux'ta denendi (macOS'ta henüz değil), birkaç kişinin verisiyle. Gördüğün sorunu ya da garip sonucu [Issues](https://github.com/merttrkr/claude-token-kit/issues) sayfasına yaz.
+Claude Code token'larının nereye gittiğini gör, gerekmeyenleri kes. token-lab bilgisayarındaki kendi Claude Code geçmişini okur ve sade rakamlarla gösterir: Claude her mesajında neyi yeniden okuyor, ne hiç kullanılmıyor, neyi değiştirmelisin. Sonra talimat dosyalarını seninle birlikte gözden geçirir ve onları ancak senin onayınla değiştirir.
 
-Claude Code her istekte modele bir sürü şey gönderir: araç tanımları, skill ve ajan listeleri, CLAUDE.md, hafıza dosyaları, önceki araç çıktıları. Bu araç **senin kendi** konuşma kayıtlarına bakar ve iki soruyu cevaplar:
-
-1. Token'larım nereye gidiyor?
-2. Hangileri hiç olmamalı?
+> **Deneme sürümü (0.2).** Windows, macOS ve Linux'ta çalışır; birkaç kişi kendi bilgisayarında denedi. Sorun ya da garip sonuç: [Issues](https://github.com/merttrkr/claude-token-kit/issues).
 
 Örnek bulgular:
 
-- "41 skill listede, 3'ü kullanıldı; her istekte 4 bin token."
-- "Bir MCP sunucusunun 9 aracı 30 günde hiç çağrılmadı."
-- "277 kez önbellek soğudu: uzun aradan sonra tüm bağlam yeniden yazıldı."
+- "41 skill her mesajda listeleniyor, sen 3'ünü kullandın: her seferinde 4 bin token."
+- "Bağlı bir servisin (MCP) 9 aracı 30 günde hiç kullanılmadı."
+- "Uzun aralardan sonra Claude bütün konuşmayı 277 kez baştan yeniden okudu."
 - "Bir dosya aynı oturumda 22 kez baştan okundu."
 
-Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü yazar.
+Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü yazar. Rakamlar para değil token: aboneliğinin sınırlarına nasıl yansıdığı ölçülmedi.
 
 ## Güvenlik
 
-- **Rapor salt okunur.** Hiçbir ayarını ya da dosyanı değiştirmez. Yazdığı tek şey kendi geçmişi, `~/.claude/token-lab/history.jsonl`: her çalıştırmada bir satır rakam (ad, yol ya da metin yok); bir sonraki raporun başındaki trend için. `--no-history` ile kapatılır; dosyayı silmek her şeyi unutturur. `/token-lab:optimize` bir dosyayı ancak farkı görüp onay verdikten sonra değiştirir. Raporun okuduğu yerler:
-  - `~/.claude/projects` altındaki kayıtlar
-  - `~/.claude/agents` ve `~/.claude/skills`
-  - kayıtlarda adı geçen hafıza index'leri (`MEMORY.md`)
-- **Araç bir şey göndermez.** Ağa çıkmaz; yalnızca ilk çalıştırmada `uv` paketi kurar, gerekirse Python'u da indirir. `/token-lab:token-lab` ya da `/token-lab:optimize` ile çalıştırdığında Claude raporu (optimize'da incelenen dosyaları da) oturumundaki herhangi bir dosya gibi okur; yani Claude konuşman nereye gidiyorsa o da oraya gider.
-- **Arkada çalışan bir şey bırakmaz.** Hook, arka plan programı, zamanlanmış görev kurmaz.
-- Bir bulguyu uygulamak istersen Claude'a söylersin; o da dosyayı ve farkı gösterip onayını alarak uygular.
+- **Yalnızca senin bilgisayarında okur:** `~/.claude/projects` altındaki Claude Code geçmişin, `~/.claude/agents`, `~/.claude/skills` ve geçmişte adı geçen hafıza dizinleri (`MEMORY.md`).
+- **Bir şey göndermez.** token-lab'in kendisi ağa çıkmaz. İndirme yalnızca kurulumda (`uv`) ve ilk çalıştırmada (token-lab'in kendisi, gerekirse Python) olur. Claude Code içinde Claude raporu konuşmandaki herhangi bir dosya gibi okur; yani rapor Claude konuşman nereye gidiyorsa oraya gider.
+- **Onayın olmadan hiçbir şeyi değiştirmez.** Ayarların, CLAUDE.md, hafıza, skill'ler ve ajanlar ancak değişikliği görüp onay verdiğinde değişir; dosyanın yanında yedek kalır (`.bak-token-lab-…`).
+- **Kendi dosyaları:** trend için her çalıştırmada `~/.claude/token-lab/history.jsonl` dosyasına bir satır rakam (ad, yol ya da metin yok; `--no-history` kapatır) ve sonra sildiği geçici dosyalar. Tam liste [SECURITY.md](SECURITY.md)'de.
+- **Arkada çalışan bir şey bırakmaz:** hook, arka plan programı, zamanlanmış görev yok.
 
-## Kurulum
+## Kurulum (yaklaşık 5 dakika)
 
-En kolayı: Claude Code'a bu sayfanın linkini verip **"bunu kur"** de. Ya da tek komut.
+1. **Bir terminal penceresi aç** (Claude Code değil):
+   - Windows: Başlat'a bas, **PowerShell** yaz, aç.
+   - macOS: Cmd+Boşluk'a bas, **Terminal** yaz, aç.
+2. **Şu komutu yapıştır ve Enter'a bas.**
 
-Windows (PowerShell):
+   Windows:
 
-```powershell
-irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.ps1 | iex
-```
+   ```powershell
+   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex
+   ```
 
-macOS / Linux:
+   macOS / Linux:
 
-```sh
-curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.sh | sh
-```
+   ```sh
+   curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh
+   ```
 
-[`install.ps1`](install.ps1) ve [`install.sh`](install.sh) sadece şunları yapar: Claude Code kurulu mu bakar, `uv` yoksa kurar (Windows'ta `winget`, macOS/Linux'ta uv'nin kendi kurulum betiği), bu plugin'i ekler ve kurar, daha önce kapatmadıysan otomatik güncellemesini açar (`/plugin` → Marketplaces → token-kit'teki düğmenin aynısı). Başka hiçbir ayara dokunmaz; kısa, açıp okuyabilirsin.
+3. **"Installed." yazısını bekle.** İlk seferde 1–3 dakika sürer. Başka bir şey çıkarsa mesaj ne yapacağını söyler.
+4. **Claude Code'u tamamen kapat** (bütün pencereleri) ve yeniden aç.
+5. **Claude Code'da `/token-lab:token-lab` yaz** ve Enter'a bas. Claude bir komut çalıştırmak için izin ister: **Yes** de. Rapor yaklaşık bir dakika sürer; sonra Claude raporu anlatır ve dosyalarına birlikte bakmayı önerir.
 
-Sonra Claude Code'u yeniden aç ve `/token-lab:token-lab` yaz.
+Kurulum ne yapar: Claude Code var mı bakar, yoksa `uv`'yi (token-lab'in üzerinde çalıştığı küçük bir araç) kurar, token-lab'i Claude Code'a ekler ve otomatik güncellemesini açar. Başka bir şey yapmaz; betikler kısa: [`install.ps1`](install.ps1), [`install.sh`](install.sh).
 
-**Güncelleme:** otomatik güncelleme açıkken Claude Code yeni sürümü oturum başladıktan birkaç dakika içinde kendisi alır ve "Plugin updated · Run /reload-plugins" der. Hemen güncellemek için kurulum komutunu yeniden çalıştır. Otomatik güncellemeyi kapatmak için: `/plugin` → Marketplaces → token-kit.
+İstersen Claude Code'a bu sayfanın linkini verip **"token-lab'i kur"** de; sonra 4. ve 5. adımları yap.
 
-> **Claude için kurulum adımları** (kullanıcı bu repoyu kurmanı istediyse):
-> 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.4/install.sh | sh`
-> 2. Çıktıda "Installed" yoksa, yazan hatayı kullanıcıya olduğu gibi söyle ve dur.
-> 3. Kullanıcıya şunu söyle: "Kuruldu. Bu oturumda `/reload-plugins` yaz ya da Claude'u yeniden aç, sonra `/token-lab:token-lab` yaz."
+**Güncellemeler** Claude Code'u açtıktan birkaç dakika sonra kendiliğinden gelir; Claude "Plugin updated · Run /reload-plugins" der: `/reload-plugins` yaz. Hemen güncellemek için kurulum komutunu yeniden yapıştır. Sürümünü görmek için: Claude Code'da `/plugin` yaz ve **Installed**'ı aç; rapor da ilk satırında gösterir.
+
+> **Claude Code için, kullanıcı token-lab'i kurmasını istediğinde:**
+> 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh`
+> 2. Çıktıda "Installed" yoksa, mesajı kullanıcıya olduğu gibi söyle ve dur.
+> 3. Kullanıcıya şunu söyle: "Kuruldu. Claude Code'u tamamen kapatıp yeniden aç, sonra `/token-lab:token-lab` yaz."
 > 4. Kurulum dışında hiçbir ayarı değiştirme.
 
-Elle kurmak istersen: önce [uv](https://docs.astral.sh/uv/) (Windows: `winget install astral-sh.uv`; macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`), sonra Claude Code içinden:
+**Elle kurulum,** aynı terminal penceresinde (Claude Code'da değil): [uv](https://docs.astral.sh/uv/)'yi kur (Windows: `winget install astral-sh.uv`; macOS/Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`), pencereyi kapatıp yeniden aç, sonra:
 
 ```
 claude plugin marketplace add https://github.com/merttrkr/claude-token-kit
 claude plugin install token-lab@token-kit
 ```
 
-Sonra Claude'da `/token-lab:token-lab` yaz. Otomatik güncelleme için `/plugin` → Marketplaces → token-kit'ten aç.
+Sonra 4. ve 5. adımlar. Otomatik güncelleme: Claude Code'da `/plugin` yaz, Marketplaces'i aç, token-kit'i seç.
 
-Kurmadan, sadece raporu görmek için:
+**Kurmadan, yalnızca rapor** (`uv` ve `git` gerekir):
 
 ```
 uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
@@ -78,10 +80,10 @@ Raporun metni İngilizce. `/token-lab:token-lab` onu Claude'a senin dilinde öze
 - **En üst:** ana rakamlarla iki cümle, sonra her açıya bir satırlık **Özet** (Summary) tablosu (araç çıktıları, cache, CLAUDE.md, hafıza, araçlar ve MCP, skill'ler, ajanlar, hook'lar; maliyetteki payı en büyük olan önce) ve **İlk adım** (First step).
 - **1. bölüm:** her istekte tekrar giden kısım ve payı.
 - **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı. Sonunda **ajan adayları** (Agent candidates) tablosu var: tekrar eden işler (general-purpose ajanlarda ya da ana oturumun kendisi okuduğu dış sistemlerde) ajan standardına göre ölçülür, tahmini haftalık kazancıyla.
-  - Maliyet "girdi-eşdeğeri token"dır. Önbellekten okunan token yaklaşık 0.1, önbelleğe yazılan 1.25–2 sayılır (Claude Code'un fiyat oranları).
+  - Maliyet "girdi-eşdeğeri token"dır: önbellekten (Claude'un yeniden kullandığı, ucuz okunan kısım) okunan token yaklaşık 0.1, önbelleğe yazılan 1.25–2 sayılır (Claude Code'un fiyat oranları).
   - Abonelikte bunun kotaya etkisi ölçülmedi.
 - **"Zaten düzelmiş görünüyor" (already looks fixed):** son 2 günün oturumlarında artık görünmeyen öğeler. Önerilmez.
-- **3. bölüm:** raporun göremedikleri. Oturum başlığı ve compaction istekleri kayıtlara yazılmıyor.
+- **3. bölüm:** raporun göremedikleri. Oturum başlığı ve özetleme (compaction: uzun konuşmanın kısaltılması) istekleri kayıtlara yazılmıyor.
 - **4. bölüm:** en çok taşınan dosyalar. İstersen Claude bunları okuyup gereksiz satırları bulur. Bu kısım model yargısıdır.
 - **5. bölüm:** ajan işleri. Hangi tekrar eden iş isimli bir ajana taşınabilir, hangi ajan kullanılmıyor.
 
@@ -89,15 +91,15 @@ Rapor ne kadar geriye bakabilir? Claude Code eski kayıtları `cleanupPeriodDays
 
 **Gelişim:** ikinci çalıştırmadan itibaren en üstteki **Trend** (Trend) tablosu istek başına sabit kısmı, kesilebilir israfı ve her açının maliyet payını son çalıştırmayla ve yaklaşık bir ay önceki çalıştırmayla karşılaştırır. İlk çalıştırma daha önceki bir noktayı da bir kez ölçer (iki hafta önce; geçmiş daha kısaysa ortası; iki günden kısaysa hiç); trend ilk günden görünür, biraz daha uzun sürer.
 
-**Bir değişiklik işe yaradı mı?** `uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why --until 2026-11-10` raporu o günün başına (UTC) kadarki transcript'lerden çıkarır; diskteki dosyalar (hafıza, ajanlar, skill'ler) bugünkü hâliyle okunur. Özet'ini bugünküyle karşılaştır; ya da `/token-lab:token-lab` içinde Claude'dan bir tarihten önce ve sonrasını karşılaştırmasını iste.
+**Bir değişiklik işe yaradı mı?** `uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why --until 2026-11-10` raporu o günün başına (UTC) kadarki konuşma kayıtlarından çıkarır; diskteki dosyalar (hafıza, ajanlar, skill'ler) bugünkü hâliyle okunur. Özet'ini bugünküyle karşılaştır; ya da `/token-lab:token-lab` içinde Claude'dan bir tarihten önce ve sonrasını karşılaştırmasını iste.
 
-## Genel optimizasyon: `/token-lab:optimize`
+## Dosya incelemesi: `/token-lab:optimize`
 
-Rapor ölçer; bu mod okur. Claude bağlamına giren her parçayı (CLAUDE.md'ler, kurallar, hafıza, skill'ler, ajanlar) en pahalıdan başlayarak placement standardına göre okur ve her satır için öneri verir: sil, kısalt, taşı (nereye) ya da birleştir. Eklenebilecekleri de önerir: tekrar eden bir araç hatası için hook, her oturumda okuduğun bir dosya için hafıza satırı, tekrar tekrar yaptığın bir düzeltme için kural.
+Rapor ölçer; bu inceleme okur. Claude bağlamına giren dosyaları (CLAUDE.md'ler, kurallar, hafıza, skill'ler, ajanlar) en pahalı 10'undan başlayarak (istersen genişletirsin) yerleşim standardına göre okur ve her satır için öneri verir: sil, kısalt, taşı (nereye) ya da birleştir. Eklenebilecekleri de önerir: tekrar eden bir araç hatası için hook, her oturumda okuduğun bir dosya için hafıza satırı, tekrar tekrar yaptığın bir düzeltme için kural.
 
 - Önce bir betik kesin olarak kontrol edilebilenleri listeler: artık olmayan yollar, system prompt'un zaten söylediği cümleler, aynı satırları paylaşan dosyalar.
-- Rapor kendi maddeleri bitince bunu önerir; istersen doğrudan da başlatabilirsin.
-- Token harcar: Claude tahmini söyler ve kaç parça okunacağını sorar.
+- Rapor buna götürür: özetten sonra Claude dosyalarınla devam etmeyi önerir. İstersen doğrudan da başlatabilirsin.
+- Claude hangi dosyalarla başlayacağını ve eklenebilecekler için geçmiş konuşmalarına bakıp bakmayacağını sorar.
 - Değişiklikler tek tek uygulanır; her birinde fark gösterilir, yedek alınır, onayın istenir.
 
 ## Kendi kuralların
@@ -122,12 +124,18 @@ Sorun ya da öneri için bu reponun **Issues** sayfası. Konuşma metni, dosya y
 
 ## Kaldırma
 
+Bir terminal penceresinde (Claude Code'da değil):
+
 ```
 claude plugin uninstall token-lab@token-kit
 claude plugin marketplace remove token-kit
 ```
 
-Geride kalanlar: raporun geçmişi, `~/.claude/token-lab/history.jsonl` (`~/.claude/token-lab` klasörünü sil), ve `uv` ile önbelleği (Python ve paketler; istersen `uv cache clean` ile silebilirsin).
+Geride kalanlar, onları da silmek istersen:
+
+- Raporun geçmişi: `~/.claude/token-lab` klasörünü sil.
+- Dosya incelemesinin değişen dosyaların yanına aldığı yedekler: `*.bak-token-lab-*`.
+- `uv` ve indirdiği Python ile paketler: `uv cache clean`, sonra uv'nin kendisi (Windows: `winget uninstall astral-sh.uv`; macOS/Linux: [uv belgeleri](https://docs.astral.sh/uv/getting-started/installation/#uninstallation)).
 
 ## Geliştirme
 

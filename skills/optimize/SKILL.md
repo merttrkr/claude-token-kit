@@ -1,14 +1,14 @@
 ---
 name: optimize
-description: Full optimization. Reads the user's loaded CLAUDE.md, rule, memory, skill and agent files line by line against the placement standard and proposes delete, shorten, move and add changes; runs only through /token-lab:optimize.
+description: File review. Goes through the user's most expensive loaded files (CLAUDE.md, rules, memory, skills, agents) against the placement standard, proposes delete, shorten, move and add changes and applies each after a yes; runs through /token-lab:optimize or after the token-lab report.
 disable-model-invocation: true
 ---
 
-# Full optimization
+# File review
 
-You read every piece that enters the user's context against the placement standard, propose changes line by line and apply them with a yes. How this differs from the report (`/token-lab:token-lab`): the report measures cost, this mode reads the lines. It spends tokens; you agree the scope with the user. You never change a file on your own.
+You read the pieces that enter the user's context, most expensive first, against the placement standard, propose changes line by line and apply them with a yes. How this differs from the report (`/token-lab:token-lab`): the report measures cost, this review reads the lines. You agree the scope with the user. You never change a file on your own.
 
-Speak the user's language: the inventory and these instructions are in English; translate what you say.
+Speak the user's language: the inventory and these instructions are in English; translate what you say. Assume the user is not technical; explain a term the first time in one everyday sentence.
 
 ## 1. Build the inventory
 
@@ -32,8 +32,8 @@ uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab inventory [--rules ~/.claude/token-l
 In the user's language, short:
 
 1. How many pieces there are, which are the 10 most expensive (section 1), how many sure findings sections 2–3 have, how many candidates section 4 has.
-2. The estimated cost, rough and as a lower bound: the characters of the pieces to read, plus `placement.md` and `system-prompt.md` for each reader (repeated once per agent), plus transcript excerpts for section 4; the total ÷ 4 ≈ tokens, output extra. Say the number.
-3. One question in two parts: "Shall I start with the 10 most expensive pieces and the sure findings? For what could be added, shall I also read the example places in your transcripts?" The user may widen the scope (from `pieces.md`), narrow it, or refuse the transcript reading; do step 4 only if they say yes.
+2. One question in two parts: "I'll start with the 10 most expensive files and the sure findings. Shall I also look at the places in your past conversations where errors and corrections repeat, to suggest what to add?" The user may widen the scope (from `pieces.md`), narrow it, or refuse the conversation reading; do step 4 only if they say yes.
+3. If the user asks what the review costs, give a rough estimate: the characters to read (the pieces, plus `placement.md` and `system-prompt.md` once per reader, plus conversation excerpts) ÷ 4 ≈ tokens, output extra. Do not bring it up otherwise.
 
 Pieces that come from a plugin (under `~/.claude/plugins/cache/...`) go back to their old form when the plugin updates. For them, propose hiding or turning off rather than editing, and tell the user so.
 
