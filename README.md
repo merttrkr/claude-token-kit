@@ -33,13 +33,13 @@ Each finding shows what it costs, the evidence and a one-sentence fix. Numbers a
    Windows:
 
    ```powershell
-   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex
+   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.ps1 | iex
    ```
 
    macOS / Linux:
 
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.sh | sh
    ```
 
 3. **Wait for "Installed."** The first time takes 1–3 minutes. If anything else appears, the message says what to do.
@@ -53,7 +53,7 @@ You can also give Claude Code the link to this page and say **"install token-lab
 **Updates** arrive by themselves a few minutes after you start Claude Code, which then says "Plugin updated · Run /reload-plugins": type `/reload-plugins`. To update right away, paste the install command again. To see your version: in Claude Code type `/plugin` and open **Installed**; the report also shows it in its first line.
 
 > **For Claude Code, when a user asks it to install token-lab:**
-> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh`
+> 1. On Windows run in PowerShell: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.ps1 | iex`. On macOS or Linux run: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.sh | sh`
 > 2. If the output has no "Installed", tell the user the message exactly as printed and stop.
 > 3. Tell the user: "Installed. Close Claude Code completely, open it again, then type `/token-lab:token-lab`."
 > 4. Change no setting other than the install.
@@ -77,7 +77,7 @@ uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 
 The report is in English. `/token-lab:token-lab` has Claude summarize it in your language.
 
-- **Top:** two sentences with the main numbers, then a **Summary** table with one line per angle (tool output, cache, CLAUDE.md, memory, tools and MCP, skills, agents, hooks), largest share of cost first, and the **First step**.
+- **Top:** two sentences with the main numbers, then a **Summary** table with one line per angle (long sessions, cache, tool output, CLAUDE.md, memory, tools and MCP, skills, agents, hooks; long sessions and cache are observations, not counted as cuttable), largest share of cost first, and the **First step**.
 - **Section 1:** the part sent again on every request, and its share.
 - **Section 2:** what should not be there, sorted by weekly cost. It ends with an **agent candidates** table: recurring work (in general-purpose agents, or outside systems the main session reads itself) measured against the agent standard, with the estimated weekly saving.
   - Cost is "input-equivalent tokens". A token read from cache counts about 0.1, a token written to cache 1.25–2 (Claude Code's price ratios).

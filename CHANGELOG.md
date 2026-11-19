@@ -2,6 +2,17 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.2.6 — 2026-11-19
+
+What a real user's review found the report did not show:
+
+- **Long sessions**, a new angle: how many sessions grew past 200 thousand tokens per request, the largest request, and the share of cost above that size. An observation like the cache: shown in the Summary, not counted as cuttable.
+- The Agents line says how much of all cost subagents carry and how much of their first request comes from cache.
+- An agent or skill listed twice under the same name (yours and a plugin's) is reported as a copy, not as two unused items.
+- MCP servers offering the same tools are shown as an observation, not counted as cuttable: one service connected twice looks the same as two environments of it.
+- Inventory: MCP tools your files name that are not loaded, and `MEMORY.md` lines that grew from a pointer into a record.
+- Corrections: a wider Turkish and English set (e.g. "why did you delete it", "I told you"), measured on real messages: 17 found before, 41 now.
+
 ## 0.2.5 — 2026-11-19
 
 For a first-time, non-technical user:

@@ -324,3 +324,54 @@ def test_a_folder_with_a_subfolder_is_not_pruned(tmp_path: Path) -> None:
     os.utime(d, (1e9 - STALE_INVENTORY_S - 1, 1e9 - STALE_INVENTORY_S - 1))
     prune_inventories(tmp_path, 1e9)
     assert (d / "inventory.md").is_dir()
+
+
+def test_tools_named_but_not_loaded_and_long_memory_lines(tmp_path: Path) -> None:
+    memory = tmp_path / "mem"
+    memory.mkdir()
+    index = memory / "MEMORY.md"
+    long_line = "- [Deploy](deploy.md) — " + "PR 41, comment 77, sent to the team, " * 8
+    index.write_text(
+        "# Index\n- [Short](short.md) — ok\n" + long_line + "\n"
+        "Use `mcp__figma__get_design_context` and `mcp__srv__ping`; not"
+        " `mcp__srv__browser_*`.\n",
+        encoding="utf-8",
+    )
+    shape = {
+        "type": "api-request-shape",
+        "shapeHash": "h",
+        "shape": {
+            "system": [{"type": "text", "text": "s"}],
+            "tools": [{"name": "mcp__srv__ping", "description": "p"}],
+        },
+    }
+    records = [
+        at(
+            {
+                "type": "attachment",
+                "attachment": {
+                    "type": "instructions",
+                    "files": [
+                        {"path": str(index), "type": "AutoMem", "content": "i" * 900}
+                    ],
+                },
+                "rendered": [{"content": "i" * 900}],
+            },
+            1,
+            0,
+        ),
+        at(shape, 1, 0),
+        at(assistant(0, "req_0", SONNET, content=[]), 1, 1),
+    ]
+    root = tmp_path / "p"
+    write_jsonl(root / "proj" / "s.jsonl", records)
+    db = tmp_path / "i.sqlite"
+    ingest(root, db)
+    text, _ = inventory.render(
+        sqlite3.connect(db), root, tmp_path, tmp_path, tmp_path, 30, LOW
+    )
+    tools = section(text, "### Tools your files name")
+    assert "`mcp__figma__get_design_context`" in tools
+    assert "mcp__srv__ping" not in tools and "browser_" not in tools
+    records_part = section(text, "### Memory index lines that grew into records")
+    assert f"MEMORY.md:3 | {len(long_line):,}" in records_part

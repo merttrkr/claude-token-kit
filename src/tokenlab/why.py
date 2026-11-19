@@ -56,7 +56,9 @@ ANGLE = {
     "S": "Skills",
     "H": "Hooks",
     "C": "Cache",
+    "L": "Long sessions",
 }
+OBSERVED = frozenset({"C", "L"})  # measured, but no sure fix
 # ToolSearch: denying it loads every deferred tool in full. The placeholder is
 # Claude Code's own stand-in for deferred tools, not a tool anyone calls.
 NEVER_FLAG = frozenset({"ToolSearch", "DeferredToolPlaceholder"})
@@ -96,6 +98,7 @@ class Finding:
     text: str
     evidence: str
     fix: str
+    observed: bool = False  # shown, but not counted as cuttable
 
 
 class Carry:
@@ -474,22 +477,31 @@ def render(
         (recent,),
     ):
         present.add(("tool", name))
-    fixed = 0
+    gone: set[tuple[str, str]] = set()
 
     def current(kind: str, name: str) -> bool:
-        nonlocal fixed
         if (kind, name) in present:
             return True
-        fixed += 1
+        gone.add((kind, name))
         return False
 
     findings: list[Finding] = []
 
-    def add(code: str, raw: float, cost: float, text: str, ev: str, fix: str) -> None:
-        if tok(cost * week) >= rules.min_weekly_tokens:
-            findings.append(
-                Finding(code, tok(cost * week), tok(raw * week), text, ev, fix)
-            )
+    def add(
+        code: str,
+        raw: float,
+        cost: float,
+        text: str,
+        ev: str,
+        fix: str,
+        observed: bool = False,
+    ) -> bool:
+        if tok(cost * week) < rules.min_weekly_tokens:
+            return False
+        findings.append(
+            Finding(code, tok(cost * week), tok(raw * week), text, ev, fix, observed)
+        )
+        return True
 
     # T: tool definitions never called.
     mcp_unused: dict[str, list[str]] = defaultdict(list)
@@ -525,6 +537,38 @@ def render(
             " off",
         )
 
+    # T: MCP servers offering the same tools: one service connected twice, or
+    # two environments of it. A script can't tell which, so an observation.
+    off_raw: dict[str, Counter[str]] = defaultdict(Counter)
+    off_cost: dict[str, dict[str, float]] = defaultdict(lambda: defaultdict(float))
+    for (kind, name), chars in by_part.items():
+        if kind in ("tool", "deferred") and name.startswith("mcp__"):
+            srv, _, tname = name[5:].partition("__")
+            if tname and current(kind, name):
+                off_raw[srv][tname] += chars
+                off_cost[srv][tname] += wpart[(kind, name)]
+    servers = sorted(off_raw)
+    for i, a in enumerate(servers):
+        for b in servers[i + 1 :]:
+            shared = sorted(off_raw[a].keys() & off_raw[b].keys())
+            fewer = min((a, b), key=lambda s: (len(off_raw[s]), s))
+            if len(shared) >= rules.overlap_tools and len(shared) * 2 >= len(
+                off_raw[fewer]
+            ):
+                add(
+                    "T",
+                    sum(off_raw[fewer][t] for t in shared),
+                    sum(off_cost[fewer][t] for t in shared),
+                    f"MCP servers `{a}` and `{b}` offer"
+                    f" {_n(len(shared), 'tool', 'tools')} of the same name"
+                    f" (cost: the copies on `{fewer}`)",
+                    _names(shared, 5),
+                    "check whether both are needed: two environments (test and"
+                    " live) are a reason to keep both, one service connected twice"
+                    " is not",
+                    observed=True,
+                )
+
     # S / A: listing lines for skills and agents that were never used.
     for kind, calls, label, fix_own, fix_plugin in (
         (
@@ -544,10 +588,35 @@ def render(
             "add `Agent(<name>)` to `permissions.deny`",
         ),
     ):
+        # The same name listed twice (your own and a plugin's `plugin:name`).
+        by_base: dict[str, list[str]] = defaultdict(list)
+        for pk, name in by_part:
+            if pk == kind and current(pk, name):
+                by_base[name.partition(":")[2] or name].append(name)
+        copy_of: dict[str, str] = {}
+        for same in by_base.values():
+            if len(same) > 1:
+                keep = min(same, key=lambda n: (-calls[n], n))
+                for n in same:
+                    if n != keep and not calls[n]:
+                        copy_of[n] = keep
+        if copy_of and not add(
+            "S" if kind == "skill" else "A",
+            sum(by_part[(kind, n)] for n in copy_of),
+            sum(wpart[(kind, n)] for n in copy_of),
+            f"{_n(len(copy_of), label + ' is', label + 's are')} listed twice"
+            " under the same name; the copy is never used",
+            _names([f"`{n}` (copy of `{copy_of[n]}`)" for n in sorted(copy_of)], 4),
+            "keep the one you use and hide the copy: "
+            + (fix_plugin if any(":" in n for n in copy_of) else fix_own),
+        ):
+            copy_of = {}  # below the cutoff: let the unused groups count them
         groups: dict[str, list[str]] = defaultdict(list)
         raw: Counter[str] = Counter()
         cost: dict[str, float] = defaultdict(float)
         for (pk, name), chars in by_part.items():
+            if name in copy_of:
+                continue
             if pk == kind and not calls[name] and current(pk, name):
                 groups[_owner(name)].append(name)
                 raw[_owner(name)] += chars
@@ -875,6 +944,40 @@ def render(
             "after a long break use /compact or a new session; split long jobs",
         )
 
+    # L: the conversation itself. The part of each main-session request above
+    # the long-context size, priced as that request was (measured tokens).
+    limit_tokens = rules.long_context_tokens
+    long_sessions: set[str] = set()
+    main_sessions: set[str] = set()
+    long_raw, long_cost, largest = 0, 0.0, 0
+    for tid, inp, rd, w5, cw in conn.execute(
+        "SELECT r.thread_id, r.input, r.cache_read, r.cache_write_5m, r.cache_write"
+        " FROM requests r JOIN threads t ON t.thread_id = r.thread_id"
+        " WHERE t.kind = 'main' AND r.ts_first >= ?",
+        (start,),
+    ):
+        size = inp + rd + cw
+        main_sessions.add(tid)
+        largest = max(largest, size)
+        if size > limit_tokens:
+            long_sessions.add(tid)
+            part = (size - limit_tokens) / size
+            long_raw += size - limit_tokens
+            long_cost += part * (inp + rd * READ + w5 * WRITE_5M + (cw - w5) * WRITE_1H)
+    if long_sessions:
+        add(
+            "L",
+            long_raw / tpc,
+            long_cost / tpc,
+            f"{len(long_sessions)} of {_n(len(main_sessions), 'session', 'sessions')}"
+            f" grew past {_human(limit_tokens)} tokens per request; the largest"
+            f" request carried {_human(largest)}",
+            f"the part of each request above {_human(limit_tokens)} tokens"
+            " (measured, not estimated)",
+            "start a new session for each task or stage and go on from a short"
+            " handoff note; use /compact before a session grows this large",
+        )
+
     # E: repeated failures.
     errors = Counter(
         tool
@@ -906,11 +1009,28 @@ def render(
         (READ, WRITE_5M, WRITE_1H, start),
     ).fetchone()[0]
     paid_week = paid * week
+    sub_paid, sub_read, sub_first = conn.execute(
+        "SELECT COALESCE(SUM(r.input + r.cache_read * ? + r.cache_write_5m * ?"
+        " + (r.cache_write - r.cache_write_5m) * ?), 0),"
+        " COALESCE(SUM(CASE WHEN r.seq = f.seq THEN r.cache_read END), 0),"
+        " COALESCE(SUM(CASE WHEN r.seq = f.seq THEN r.input + r.cache_read"
+        " + r.cache_write END), 0)"
+        " FROM requests r JOIN threads t ON t.thread_id = r.thread_id"
+        " JOIN (SELECT thread_id, MIN(seq) AS seq FROM requests GROUP BY thread_id) f"
+        " ON f.thread_id = r.thread_id"
+        " WHERE t.kind = 'subagent' AND r.ts_first >= ?",
+        (READ, WRITE_5M, WRITE_1H, start),
+    ).fetchone()
 
-    # Cache cooling is measured but not a fix anyone can be sure of: an observation.
+    # Cache cooling and long sessions are measured, but no fix is sure (a new
+    # session has its own cost) and they overlap the other angles: observations,
+    # shown in the Summary, left out of the cuttable total and the first step.
     cache = [f for f in findings if f.code == "C"]
+    long_ = [f for f in findings if f.code == "L"]
+    noted = [f for f in findings if f.observed]
     waste = sorted(
-        (f for f in findings if f.code != "C"), key=lambda f: (-f.cost, f.code, f.text)
+        (f for f in findings if f.code not in OBSERVED and not f.observed),
+        key=lambda f: (-f.cost, f.code, f.text),
     )
     total_carried = sum(by_cat.values())
     total_weighted = sum(wcat.values())
@@ -925,6 +1045,10 @@ def render(
         if mine:
             found = mine[0].text + (f" (+{len(mine) - 1} findings)" if mine[1:] else "")
             todo = mine[0].fix
+        # An observation of this angle shows here too, outside its share.
+        for f in (f for f in noted if f.code == code):
+            found = (found + "; " if found else "") + f.text + " (observation)"
+            todo = todo or f.fix
         if code == "D":
             docs = sorted(
                 (
@@ -949,6 +1073,9 @@ def render(
             generic = sum(agent_calls[g] for g in GENERIC)
             if total:
                 head = (
+                    f"subagents carry {_share(sub_paid, paid)} of all cost, and only"
+                    f" {_share(sub_read, sub_first)} of their first request comes"
+                    " from cache; "
                     f"general-purpose share {generic / total * 100:.0f}%"
                     f" ({generic}/{total} calls)"
                 )
@@ -989,6 +1116,10 @@ def render(
             share = cache[0].cost
             found = cache[0].text + " (observation)"
             todo = "open a new session after a long break; not a sure fix"
+        elif code == "L" and long_:
+            share = long_[0].cost
+            found = long_[0].text + " (observation; overlaps the other rows)"
+            todo = long_[0].fix + "; the saving is not measured"
         rows.append((share, angle, found or "no issue", todo or "-", code))
 
     cut = sum(f.cost for f in waste)
@@ -1161,11 +1292,19 @@ def render(
             "",
             f"Observation: {f.text}; {f.cost:,} input-equivalent tokens a week.",
         ]
-    if fixed:
+    for f in noted:
         lines += [
             "",
-            f"{_n(fixed, 'item is', 'items are')} absent from the sessions of the last"
-            f" {rules.current_days} days: they look already fixed, not listed.",
+            f"Observation ({ANGLE[f.code].lower()}): {f.text}, {f.evidence};"
+            f" {f.cost:,} input-equivalent tokens a week, not counted as cuttable;"
+            f" {f.fix}.",
+        ]
+    if gone:
+        lines += [
+            "",
+            f"{_n(len(gone), 'item is', 'items are')} absent from the sessions of"
+            f" the last {rules.current_days} days: they look already fixed, not"
+            " listed.",
         ]
     if errors or hooks or truncated:
         top_errors = sorted(errors.items(), key=lambda kv: (-kv[1], kv[0]))[:6]

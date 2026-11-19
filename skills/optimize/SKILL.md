@@ -23,8 +23,8 @@ uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab inventory [--rules ~/.claude/token-l
 - If `uvx` is not found, say "Install uv first, then reopen Claude." and give the command for the user's OS, then stop (Windows: `winget install astral-sh.uv`; macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`).
 - The inventory only reads and makes no network calls. Its sections:
   1. **Pieces:** each piece's file, size, weekly cost and use.
-  2. **Stale references:** paths that are not on disk. A script result, sure.
-  3. **Repeated lines:** sentences the system prompt already says, and pairs of files that share sentences. A script result, sure.
+  2. **Stale references:** paths that are not on disk, and MCP tools your files name that are never loaded (a line that tells Claude to use one cannot be followed; a line that only mentions it is fine). A script result, sure.
+  3. **Repeated lines:** sentences the system prompt already says, `MEMORY.md` lines that grew from a pointer into a record, and pairs of files that share sentences. A script result, sure.
   4. **Could be added:** recurring tool errors, files re-read across sessions, where the corrections are. These are candidates; reading decides.
 
 ## 2. Agree the scope

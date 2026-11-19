@@ -48,6 +48,9 @@ Actions on a piece: **delete** (fails questions 1–4), **edit** (vague or long 
 
 | Finding in the report | Usual action |
 |---|---|
+| long sessions (observation) | not a file: start a new session per task or stage, carry on from a short handoff note, `/compact` earlier; say the saving is not measured |
+| an agent or skill listed twice under the same name | hide the copy that is not used (plugin skill: `disable-model-invocation: true`; agent: `Agent(<name>)` in `permissions.deny`) |
+| MCP servers offering the same tools | ask whether both are needed (another environment is a reason); if not, disable one server |
 | a tool never called | `permissions.deny` in `settings.json` (not `ToolSearch`: denying it loads every deferred tool in full) |
 | MCP tools never called | `permissions.deny` with the tool name (`mcp__<server>__<tool>`) or the whole server (`mcp__<server>`), or disable the server |
 | own skill never used | `skillOverrides` in `settings.json`: `"user-invocable-only"` hides it from Claude but keeps `/name`; `"name-only"` keeps it listed without its description; `"off"` hides it from both. Ask the user which |

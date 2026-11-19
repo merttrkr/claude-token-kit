@@ -204,7 +204,9 @@ def test_an_item_gone_from_recent_sessions_counts_as_fixed(
     text = why.render(sqlite3.connect(db), 30, LOW)
     skills = " ".join(finding(text, "S"))
     assert "idle-skill" not in skills and "plug:idle" in skills
-    assert "they look already fixed" in text
+    # Five distinct items (two agents, a skill, two tools), each counted once
+    # though several checks look at the same listing.
+    assert "5 items are absent" in text and "they look already fixed" in text
 
 
 def test_a_finding_below_the_cutoff_is_not_shown(conn: sqlite3.Connection) -> None:
@@ -761,3 +763,146 @@ def test_an_empty_history_prints_only_the_empty_message(tmp_path: Path) -> None:
     assert out.getvalue() == (
         "No Claude Code requests yet: try again after a few sessions.\n"
     )
+
+
+def _corpus(tmp_path: Path, records: list[dict[str, Any]]) -> sqlite3.Connection:
+    root = tmp_path / "corpus"
+    write_jsonl(root / PROJECT / f"{MAIN}.jsonl", records)
+    db = tmp_path / "x.sqlite"
+    ingest(root, db)
+    return sqlite3.connect(db)
+
+
+def test_long_sessions_are_an_observation_not_cuttable(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            at(assistant(0, f"req_{i}", SONNET, content=[], read=300_000), i)
+            for i in range(3)
+        ],
+    )
+    # A subagent's request is not a long session, however large.
+    sub = root / PROJECT / MAIN / "subagents"
+    write_jsonl(
+        sub / "agent-s1.jsonl",
+        [at(assistant(0, "req_s", SONNET, content=[], read=900_000), 1)],
+    )
+    (sub / "agent-s1.meta.json").write_text(json.dumps({"agentType": "scout"}))
+    db = tmp_path / "x.sqlite"
+    ingest(root, db)
+    text = why.render(sqlite3.connect(db), 30, LOW)
+    row = next(r for r in text.splitlines() if r.startswith("| Long sessions |"))
+    assert "1 of 1 session grew past 200 thousand" in row and "(observation" in row
+    assert "the largest request carried 300 thousand" in row
+    # A third of each main request (30,000 weighted) of 180,000 in all.
+    assert "| 17% |" in row
+    assert "the saving is not measured" in row
+    assert "No cuttable waste above the threshold." in summary(text)
+    # Not counted as cuttable waste and never the first step.
+    first = text.split("## First step", 1)[1].split("**Next:**", 1)[0]
+    assert "Long sessions" not in first
+
+
+def test_a_skill_listed_twice_is_a_copy(tmp_path: Path) -> None:
+    conn = _corpus(
+        tmp_path,
+        [
+            att("skill_listing", 0, content="- tidy: a\n- plug:tidy: b"),
+            at(
+                assistant(
+                    0, "req_0", SONNET, content=[use("t1", "Skill", skill="tidy")]
+                ),
+                1,
+            ),
+            at(assistant(0, "req_1", SONNET, content=[]), 2),
+        ],
+    )
+    text = why.render(conn, 30, LOW)
+    rows = finding(text, "S")
+    assert any(
+        "listed twice" in r and "`plug:tidy` (copy of `tidy`)" in r for r in rows
+    )
+    # The copy is not also reported as an unused skill.
+    assert not any("plugin `plug`" in r for r in rows)
+
+
+def test_two_mcp_servers_with_the_same_tools_overlap(tmp_path: Path) -> None:
+    tools = [
+        {"name": f"mcp__{s}__{t}", "description": "d" * 200}
+        for s in ("grafana", "grafana-test")
+        for t in ("query", "search", "list", "get")
+    ]
+    shape = {
+        "type": "api-request-shape",
+        "shapeHash": "h",
+        "shape": {"system": [{"type": "text", "text": "s"}], "tools": tools},
+    }
+    conn = _corpus(
+        tmp_path,
+        [at(shape, 0), at(assistant(0, "req_0", SONNET, content=[]), 1)],
+    )
+    text = why.render(conn, 30, LOW)
+    # Two environments of one service look the same: an observation, not cut.
+    assert not any("same name" in r for r in finding(text, "T"))
+    note = next(r for r in text.splitlines() if r.startswith("Observation (tools"))
+    assert "MCP servers `grafana` and `grafana-test` offer 4 tools" in note
+    assert "not counted as cuttable" in note
+    # It shows in the Summary too, so it is not missed, with no cuttable share.
+    row = next(
+        r for r in summary(text).splitlines() if r.startswith("| Tools and MCP |")
+    )
+    assert "offer 4 tools of the same name (cost: the copies on" in row
+    assert "(observation)" in row
+
+
+def test_the_agents_line_says_how_much_subagents_carry(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [at(assistant(0, "req_0", SONNET, content=[], input_tokens=872), 0)],
+    )
+    sub = root / PROJECT / MAIN / "subagents"
+    write_jsonl(
+        sub / "agent-s1.jsonl",
+        [
+            # First request: 80 of 100 tokens from cache; paid 20 + 8.
+            at(assistant(0, "req_1", SONNET, content=[], input_tokens=20, read=80), 1),
+            at(assistant(0, "req_2", SONNET, content=[], read=1000), 2),
+        ],
+    )
+    (sub / "agent-s1.meta.json").write_text(json.dumps({"agentType": "scout"}))
+    db = tmp_path / "x.sqlite"
+    ingest(root, db)
+    row = next(
+        r
+        for r in summary(why.render(sqlite3.connect(db), 30, LOW)).splitlines()
+        if r.startswith("| Agents |")
+    )
+    # 128 of 1,000 paid tokens.
+    assert "subagents carry 13% of all cost, and only 80% of their first request" in row
+
+
+def test_a_copy_below_the_cutoff_still_counts_as_unused(tmp_path: Path) -> None:
+    records = [
+        att(
+            "skill_listing",
+            0,
+            content=f"- tidy: a\n- plug:tidy: {'b' * 400}\n- plug:other: {'c' * 400}",
+        ),
+        at(
+            assistant(0, "req_0", SONNET, content=[use("t1", "Skill", skill="tidy")]), 1
+        ),
+        at(assistant(0, "req_1", SONNET, content=[]), 2),
+    ]
+    copy = next(
+        r
+        for r in finding(why.render(_corpus(tmp_path, records), 30, LOW), "S")
+        if "listed twice" in r
+    )
+    weekly = int(copy.split("|")[3].replace(",", ""))
+    # The copy alone is under the cutoff; with the other unused skill it is over.
+    mid = Rules(min_weekly_tokens=weekly * 3 // 2, big_result_chars=100)
+    (tmp_path / "again").mkdir()
+    rows = finding(why.render(_corpus(tmp_path / "again", records), 30, mid), "S")
+    assert any("plugin `plug`: 2 skills" in r for r in rows)

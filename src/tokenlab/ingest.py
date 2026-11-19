@@ -79,13 +79,39 @@ TURN_PREFIXES = (
 # A slash command (skill, plugin skill or built-in) as the user message records it.
 SLASH_COMMAND = re.compile(r"<command-name>/([^<\s]+)</command-name>")
 ORIGIN_KINDS = frozenset({"human", "peer", "task_notification"})
-# A human turn that opens like this is counted as a correction. A rough proxy, read
-# together with interrupts and rejections, never alone.
+# A human turn that opens like this, or says one of the CORRECTION_ANY phrases, is
+# counted as a correction. A rough proxy, read together with interrupts and
+# rejections, never alone. Measured on a month of real Turkish/English turns: the
+# opening words alone caught 17 corrections; with the wider set and the phrases, 41,
+# and a sample of the new ones were all corrections or objections. A bare "yanlış"
+# inside a sentence is left out: it mostly described a bug, not Claude's mistake.
 CORRECTION = re.compile(
-    r"^\W*(?:hayır|hayir|yanlış|yanlis|olmadı|olmadi|öyle değil|dur\b|durdur|"
-    r"geri al|no\b|nope\b|wrong\b|stop\b|that'?s not|not what)",
+    r"^\W*(?:hayır|hayir|yok\b|yanlış|yanlis|olmadı|olmadi|olmamış|olmamis|"
+    r"öyle değil|oyle degil|böyle değil|boyle degil|bu değil|değil\b(?! mi)|"
+    r"dur\b|durdur|bekle\b|geri al|yapma\b|hatalı|hatali|no\b|nope\b|wrong\b|"
+    r"stop\b|wait\b|don'?t\b|undo\b|revert\b|incorrect\b|that'?s not|not what|"
+    r"that'?s wrong)",
     re.IGNORECASE,
 )
+CORRECTION_ANY = re.compile(
+    r"\bsana\b.{0,40}\b(?:dedim|demiştim|demistim|söyledim|söylemiştim|soylemistim)\b|"
+    r"\bben\b.{0,30}\b(?:dedim|demiştim|istemedim|sormadım)\b|"
+    r"\bbunu (?:istemedim|sormadım|sormadim|demedim)\b|"
+    r"\b(?:neden|niye|niçin)\b.{0,60}\b(?:yaptın|yaptin|ettin|sildin|değiştirdin|"
+    r"degistirdin|ekledin|yazdın|yazdin)\b|"
+    r"\b(?:yapmadın|yapmadin|okumadın|okumadin|bakmadın|bakmadin)\b|"
+    r"hoşuma gitmedi|hosuma gitmedi|beğenmedim|begenmedim|"
+    r"yanlış anladın|yanlis anladin|\banlamadın\b|\banlamadin\b|"
+    r"\bI (?:said|told you)\b|\bwhy did you\b|\byou (?:didn'?t|did not)\b|"
+    r"\bnot what I (?:asked|meant|said)\b|\bI didn'?t ask\b",
+    re.IGNORECASE,
+)
+
+
+def is_correction(text: str) -> bool:
+    return bool(CORRECTION.match(text) or CORRECTION_ANY.search(text))
+
+
 HOOK_ERROR = re.compile(r"^(?:Pre|Post)ToolUse:\S+ hook error")
 GATE_ID = re.compile(r"\[(G\d+)[:\]]")
 USER_REFUSAL = "The user doesn't want to proceed"
@@ -503,7 +529,7 @@ class Ingest:
                     ts,
                     kind,
                     len(text),
-                    int(kind == "human" and bool(CORRECTION.match(text))),
+                    int(kind == "human" and is_correction(text)),
                     turn_source(rec),
                 ),
             )

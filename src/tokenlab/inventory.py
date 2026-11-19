@@ -42,6 +42,13 @@ MAX_ROWS = 15  # rows per list in section 4
 MAX_PIECES = 30  # pieces listed in section 1; the rest are summed
 MAX_STALE = 40  # missing references listed
 MAX_PAIRS = 20  # file pairs listed in section 3
+# A full MCP tool name; a pattern such as `mcp__srv__browser_*` is not one.
+TOOL_REF = re.compile(
+    r"\bmcp__[A-Za-z0-9-]+(?:_[A-Za-z0-9-]+)*__[A-Za-z0-9_-]*[A-Za-z0-9](?![\w*-])"
+)
+# A MEMORY.md list line longer than this is a record, not a pointer: the index
+# lines the maintainer wrote as pointers are under 200 characters.
+LONG_INDEX_LINE = 200
 
 
 def system_prompt(root: Path) -> str:
@@ -261,6 +268,17 @@ def render(
     missing: list[tuple[str, str]] = []
     where: dict[str, set[str]] = defaultdict(set)
     shown: dict[str, str] = {}
+    # Tools ever loaded in these transcripts: definitions sent, or names listed
+    # for search. A tool loaded once is not reported (a miss, not a false alarm).
+    loaded = {
+        name
+        for (name,) in conn.execute(
+            "SELECT DISTINCT name FROM parts WHERE kind = 'deferred'"
+            " UNION SELECT DISTINCT name FROM prefix WHERE source = 'tool'"
+        )
+    }
+    unloaded: dict[str, list[str]] = defaultdict(list)
+    records: list[tuple[str, int]] = []
     for _, path in readable:
         try:
             body = path.read_text(encoding="utf-8")
@@ -272,6 +290,17 @@ def render(
             for ref, link in refs:
                 if _is_path(ref, link) and not _exists(ref, path.parent):
                     missing.append((f"{path}:{i}", ref))
+            if loaded:
+                for tool in TOOL_REF.findall(line):
+                    if tool not in loaded:
+                        unloaded[tool].append(f"{path}:{i}")
+            if (
+                path.name.lower() == "memory.md"
+                and line.lstrip().startswith(("- ", "* "))
+                and len(line) > LONG_INDEX_LINE
+                and MD_TARGET.search(line)
+            ):
+                records.append((f"{path}:{i}", len(line)))
             for sentence in SENTENCE.split(line):
                 n = _norm(sentence)
                 if len(n) >= MIN_SENTENCE:
@@ -305,6 +334,21 @@ def render(
             lines += ["", f"+{len(refs_sorted) - MAX_STALE} more references."]
     else:
         lines.append("None.")
+    lines += [
+        "",
+        "### Tools your files name that are not loaded",
+        "",
+        "Named in these files, never loaded in these transcripts: the server is"
+        " off, not signed in, or renamed. A line that tells Claude to use one"
+        " cannot be followed; a line that only mentions it is fine.",
+        "",
+    ]
+    if unloaded:
+        lines += ["| tool | first place | places |", "|---|---|---|"]
+        for tool, locs in sorted(unloaded.items())[:MAX_STALE]:
+            lines.append(f"| `{tool}` | {locs[0]} | {len(locs)} |")
+    else:
+        lines.append("None." if loaded else "Not checked: no tool list in the window.")
     # A sentence the system prompt already says, line by line; two files that
     # share sentences, as one pair (usually a copy of the same skill).
     in_prompt = sorted(n for n, places in where.items() if "system prompt" in places)
@@ -325,6 +369,24 @@ def render(
         for n in in_prompt:
             text = shown[n][:90].replace("|", "/")
             lines.append(f"| {text} | {', '.join(sorted(where[n]))} |")
+    else:
+        lines.append("None.")
+    lines += [
+        "",
+        "### Memory index lines that grew into records",
+        "",
+        f"`MEMORY.md` is read in every session; a line is meant as a short pointer."
+        f" Lines with a link and over {LONG_INDEX_LINE} characters, longest first;"
+        " their detail belongs in the linked file.",
+        "",
+    ]
+    if records:
+        ranked_records = sorted(records, key=lambda r: (-r[1], r[0]))
+        lines += ["| line | characters |", "|---|---|"]
+        for loc, width in ranked_records[:MAX_ROWS]:
+            lines.append(f"| {loc} | {width:,} |")
+        if len(records) > MAX_ROWS:
+            lines += ["", f"+{len(records) - MAX_ROWS} more lines."]
     else:
         lines.append("None.")
     lines += ["", "### Files that share sentences", ""]
@@ -423,8 +485,9 @@ def render(
         "### Corrections (rule candidates)",
         "",
         _n(len(fixes), "correction", "corrections")
-        + ' (messages starting with a word like "no", "wrong"'
-        ' or "stop", in English or Turkish; a rough count). Places to read:',
+        + ' (messages that start with "no", "wrong", "stop" or that say "I told'
+        ' you", "why did you delete it" and the like, in English or Turkish; a'
+        " rough count). Places to read:",
         "",
     ]
     lines += [f"- {file} · {ts}" for file, ts in fixes[-20:]]

@@ -145,3 +145,26 @@ def test_turns_results_and_spawns(tmp_path: Path) -> None:
 def test_turn_kind_reads_the_source_fields(rec: dict[str, Any], kind: str) -> None:
     assert turn_kind(rec, "some text") == kind
     assert turn_source({"turnOrigin": "sdk"}) == "sdk/-/-"
+
+
+@pytest.mark.parametrize(
+    ("text", "want"),
+    [
+        ("hayır öyle değil", True),
+        ("yok bu iyi değil ya", True),
+        ("niye paralellik ekledin", True),
+        ("ben 10 dk dedim aslında", True),
+        ("bunu istemedim", True),
+        ("direkt böyle yapman hoşuma gitmedi", True),
+        ("but why did you fit the 512 there", True),
+        ("kontrat import bazen yanlış çalışıyor", False),  # a bug, not a correction
+        ("devam et", False),
+        ("neden böyle bir tasarım seçildi?", False),  # a question, no verb of blame
+        ("değil mi, bu doğru?", False),  # a question tag
+        ("değil, diğer dosyayı kastettim", True),
+    ],
+)
+def test_corrections_open_with_or_say_a_correction(text: str, want: bool) -> None:
+    from tokenlab.ingest import is_correction
+
+    assert is_correction(text) is want

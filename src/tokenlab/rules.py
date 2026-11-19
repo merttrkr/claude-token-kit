@@ -40,6 +40,8 @@ class Rules:
     big_result_chars: int = 20_000  # one tool result this large is a finding
     reread_min: int = 3  # the same file read this often in one thread
     cold_write_tokens: int = 20_000  # cache rewritten after an idle gap
+    long_context_tokens: int = 200_000  # a request this large is a long session
+    overlap_tools: int = 3  # MCP servers sharing this many tool names overlap
     current_days: int = 2  # an item missing from sessions this recent is fixed
     max_candidates: int = 10  # rows in the agent candidates table
     areas: tuple[tuple[str, str], ...] = ()

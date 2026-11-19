@@ -33,13 +33,13 @@ Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü ya
    Windows:
 
    ```powershell
-   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex
+   irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.ps1 | iex
    ```
 
    macOS / Linux:
 
    ```sh
-   curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh
+   curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.sh | sh
    ```
 
 3. **"Installed." yazısını bekle.** İlk seferde 1–3 dakika sürer. Başka bir şey çıkarsa mesaj ne yapacağını söyler.
@@ -53,7 +53,7 @@ Kurulum ne yapar: Claude Code var mı bakar, yoksa `uv`'yi (token-lab'in üzerin
 **Güncellemeler** Claude Code'u açtıktan birkaç dakika sonra kendiliğinden gelir; Claude "Plugin updated · Run /reload-plugins" der: `/reload-plugins` yaz. Hemen güncellemek için kurulum komutunu yeniden yapıştır. Sürümünü görmek için: Claude Code'da `/plugin` yaz ve **Installed**'ı aç; rapor da ilk satırında gösterir.
 
 > **Claude Code için, kullanıcı token-lab'i kurmasını istediğinde:**
-> 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.5/install.sh | sh`
+> 1. Windows'ta PowerShell'de çalıştır: `irm https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.ps1 | iex`. macOS ya da Linux'ta çalıştır: `curl -fsSL https://raw.githubusercontent.com/merttrkr/claude-token-kit/v0.2.6/install.sh | sh`
 > 2. Çıktıda "Installed" yoksa, mesajı kullanıcıya olduğu gibi söyle ve dur.
 > 3. Kullanıcıya şunu söyle: "Kuruldu. Claude Code'u tamamen kapatıp yeniden aç, sonra `/token-lab:token-lab` yaz."
 > 4. Kurulum dışında hiçbir ayarı değiştirme.
@@ -77,7 +77,7 @@ uvx --from git+https://github.com/merttrkr/claude-token-kit tokenlab why
 
 Raporun metni İngilizce. `/token-lab:token-lab` onu Claude'a senin dilinde özetletir; başlık adları aşağıda parantez içinde.
 
-- **En üst:** ana rakamlarla iki cümle, sonra her açıya bir satırlık **Özet** (Summary) tablosu (araç çıktıları, cache, CLAUDE.md, hafıza, araçlar ve MCP, skill'ler, ajanlar, hook'lar; maliyetteki payı en büyük olan önce) ve **İlk adım** (First step).
+- **En üst:** ana rakamlarla iki cümle, sonra her açıya bir satırlık **Özet** (Summary) tablosu (uzun oturumlar, önbellek, araç çıktıları, CLAUDE.md, hafıza, araçlar ve MCP, skill'ler, ajanlar, hook'lar; uzun oturumlar ve önbellek gözlemdir, kesilebilir sayılmaz; maliyetteki payı en büyük olan önce) ve **İlk adım** (First step).
 - **1. bölüm:** her istekte tekrar giden kısım ve payı.
 - **2. bölüm:** olmaması gerekenler, haftalık maliyete göre sıralı. Sonunda **ajan adayları** (Agent candidates) tablosu var: tekrar eden işler (general-purpose ajanlarda ya da ana oturumun kendisi okuduğu dış sistemlerde) ajan standardına göre ölçülür, tahmini haftalık kazancıyla.
   - Maliyet "girdi-eşdeğeri token"dır: önbellekten (Claude'un yeniden kullandığı, ucuz okunan kısım) okunan token yaklaşık 0.1, önbelleğe yazılan 1.25–2 sayılır (Claude Code'un fiyat oranları).
