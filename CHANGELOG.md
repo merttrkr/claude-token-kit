@@ -2,6 +2,15 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## 0.2.8 — 2026-11-26
+
+Fixes from an independent read of 0.2.7:
+
+- A project whose CLAUDE.md is in `.claude/` resolves relative links from the project folder, not from `.claude/`.
+- Error kinds: `http 4xx` and `http 5xx` added; "does not exist", "is not recognized as" and "exceeds" match only file, command and size errors, so a missing model or a usage limit is no longer "file not found" or "too large".
+- File review: in the all-at-the-end mode the diffs come at the end, not before each change; the closing table has a "how to undo" column; the in-session reading choice belongs to the one-at-a-time mode.
+- `claudeMdExcludes` goes into `~/.claude/settings.json` or the project's `.claude/settings.local.json`, never a shared or managed settings file.
+
 ## 0.2.7 — 2026-11-26
 
 What a second user's review found ([decision 004](docs/decisions/004-second-user-review.md)):

@@ -451,8 +451,52 @@ def test_a_recurring_error_shows_its_kinds_never_its_text(
         ("String to replace not found in file.", "edit text not found"),
         ("Command timed out after 2m", "timeout"),
         ("Permission denied (publickey)", "permission denied"),
+        ("Request failed with status code 404", "http 4xx"),
+        ("HTTP 503 Service Unavailable", "http 5xx"),
+        ("Model claude-x does not exist", "other"),
+        ("Input exceeds the maximum of 2000 lines", "too large"),
+        ("Usage exceeds your plan", "other"),
         ("something else went wrong: token=abc", "other"),
     ],
 )
 def test_error_kinds_come_from_a_fixed_list(text: str, kind: str) -> None:
     assert error_kind(text) == kind
+
+
+def test_an_error_kind_is_stored_with_the_result(tmp_path: Path) -> None:
+    root = tmp_path / "p"
+    write_jsonl(
+        root / "proj" / "s.jsonl",
+        [
+            at(
+                assistant(
+                    0, "req_0", SONNET, content=[use("b1", "Bash", command="make")]
+                ),
+                1,
+                1,
+            ),
+            at(
+                {
+                    "type": "user",
+                    "message": {
+                        "content": [
+                            {
+                                "type": "tool_result",
+                                "tool_use_id": "b1",
+                                "content": "Exit code 2\nmake: *** no rule",
+                                "is_error": True,
+                            }
+                        ]
+                    },
+                },
+                1,
+                2,
+            ),
+        ],
+    )
+    db = tmp_path / "i.sqlite"
+    ingest(root, db)
+    rows = sqlite3.connect(db).execute(
+        "SELECT error_kind FROM content WHERE kind = 'tool_result'"
+    )
+    assert rows.fetchall() == [("exit code 2",)]

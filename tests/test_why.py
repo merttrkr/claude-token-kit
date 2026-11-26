@@ -1025,3 +1025,32 @@ def test_an_unused_agent_that_is_the_only_way_to_a_tool_is_kept(
         "`fetcher` → `WebFetch`" in kept[0] and "`plug:fetch` → `WebFetch`" in kept[0]
     )
     assert "not counted as cuttable" in kept[0]
+
+
+def test_project_roots_are_the_folders_of_loaded_claude_md_files() -> None:
+    names = ["/r/a/CLAUDE.md", "/r/b/.claude/CLAUDE.md", "/r/c/notes.md"]
+    assert why.project_roots(names) == [Path("/r/a"), Path("/r/b")]
+
+
+def test_without_a_tool_shape_an_unused_agent_is_not_an_only_route(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            att(
+                "agent_listing_delta",
+                0,
+                addedTypes=["fetcher"],
+                addedLines=["- fetcher: reads web pages (Tools: WebFetch)"],
+            ),
+            at(assistant(0, "req_0", SONNET, content=[], input_tokens=4000), 1),
+            at(assistant(0, "req_1", SONNET, content=[], read=4000), 2),
+        ],
+    )
+    db = tmp_path / "ledger.sqlite"
+    ingest(root, db)
+    text = why.render(sqlite3.connect(db), 30, LOW)
+    assert any("fetcher" in r for r in finding(text, "A"))
+    assert "only way to a tool" not in text

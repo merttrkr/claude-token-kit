@@ -80,25 +80,42 @@ TURN_PREFIXES = (
 SLASH_COMMAND = re.compile(r"<command-name>/([^<\s]+)</command-name>")
 # A tool error's kind from a fixed list, never its text: an error message can hold
 # secrets or other people's words. First match wins. On 472 errors in the
-# maintainer's transcripts (2026-11) 13% fell into "other". Hook blocks and the
+# maintainer's transcripts (2026-11) 28% fell into "other", about a third of them
+# the user's rejections. Hook blocks and the
 # user's rejections are in `decision` already.
 ERROR_KINDS = [
     ("file not read first", re.compile(r"has not been read yet", re.I)),
     ("file changed since read", re.compile(r"modified since .{0,20}read", re.I)),
     ("edit text not found", re.compile(r"string to replace not found", re.I)),
     (
+        "http",
+        re.compile(r"\b(?:status(?: code)?|http(?:/[\d.]+)?):? ([45])\d\d\b", re.I),
+    ),
+    (
         "file not found",
         re.compile(
-            r"no such file|does not exist|enoent|cannot find the (?:path|file)", re.I
+            r"no such file|(?:file|path|directory) does not exist|enoent"
+            r"|cannot find the (?:path|file)",
+            re.I,
         ),
     ),
     (
         "permission denied",
         re.compile(r"permission denied|access is denied|eacces", re.I),
     ),
-    ("command not found", re.compile(r"command not found|is not recognized as", re.I)),
+    (
+        "command not found",
+        re.compile(
+            r"command not found|is not recognized as (?:the name of a cmdlet"
+            r"|an internal or external command)",
+            re.I,
+        ),
+    ),
     ("timeout", re.compile(r"timed? ?out", re.I)),
-    ("too large", re.compile(r"exceeds|too large|too long", re.I)),
+    (
+        "too large",
+        re.compile(r"exceeds (?:the )?(?:maximum|max|limit)|too large|too long", re.I),
+    ),
     (
         "invalid input",
         re.compile(r"inputvalidationerror|invalid (?:input|param)", re.I),
@@ -160,10 +177,12 @@ def _path(p: Any) -> str:
 
 
 def error_kind(text: str) -> str:
-    """`exit code 1`, `file not found`, … or `other`: a name from `ERROR_KINDS`."""
+    """`exit code 1`, `http 4xx`, `file not found`, … or `other`: from `ERROR_KINDS`."""
     for name, pattern in ERROR_KINDS:
         if m := pattern.search(text):
-            return m.group(0).lower() if name == "exit code" else name
+            if name == "exit code":
+                return m.group(0).lower()
+            return f"http {m.group(1)}xx" if name == "http" else name
     return "other"
 
 

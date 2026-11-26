@@ -337,7 +337,8 @@ def render(
         "",
         "## 2. Stale references (sure: not on disk)",
         "",
-        "Relative paths are looked up in the piece's folder and three folders up;"
+        "Relative paths are looked up in the piece's folder, three folders up and"
+        " each loaded project's root;"
         " bare file names in quotes and folder patterns are not checked.",
         "",
     ]

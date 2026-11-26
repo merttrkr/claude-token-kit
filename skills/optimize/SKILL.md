@@ -15,7 +15,7 @@ Speak the user's language: the inventory and these instructions are in English; 
 Before anything else, one question in the user's language: "Shall I go one change at a time, each with your yes, or make all the changes myself and show you everything at the end? (Every file is backed up first either way.)" Default: one at a time.
 
 - **One at a time:** steps 1–7 as written.
-- **All at the end:** the user's answer is the yes for every change. Ask nothing more: the scope is the default one (step 2, without the conversation reading), the reading is as in step 3, and step 6 applies everything (6b). Tell the user the cost estimate (step 2.3) in one line and start.
+- **All at the end:** the user's answer is the yes for every change. Ask nothing more: the scope is the default one (step 2, without the conversation reading), the reading uses parallel readers when more than 3 pieces are in scope (faster; the cheaper in-session reading is a one-at-a-time choice), and step 6 applies everything (6b). Tell the user the cost estimate (step 2.3) in one line and start.
 
 ## 1. Build the inventory
 
@@ -92,8 +92,8 @@ One suggestion at a time, each with its own yes:
 ### 6b. All at the end
 
 - Apply every finding in the list's order, the judgment ones too. Where a finding leaves a choice (which copy of a shared sentence to keep, fix or delete a stale path), choose yourself and say why in the table.
-- The rules of 6a hold, except the yes per diff: back up each file before its first change, mask `env` in `settings.json`, add before you delete in a move, follow `agent.md` and `memory.md`.
-- At the end, show one table: change, file, why, backup path. Then show every diff (for `settings.json`, only the changed key, masked). Then say how to undo one: copy its backup back over the file.
+- Two things differ from 6a: there is no yes per change, and the diffs are shown at the end, not before each change. Everything else in 6a holds: back up each file before its first change, mask `env` in `settings.json`, add before you delete in a move, follow `agent.md` and `memory.md`.
+- At the end, show one table: change, file, why, backup path, how to undo (copy the backup back over the file). Then show every diff (for `settings.json`, only the changed key, masked).
 
 ## 7. Closing
 

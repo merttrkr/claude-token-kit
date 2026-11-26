@@ -18,7 +18,7 @@ A second user ran the report and the file review end to end on Windows. What wen
 ## Evidence
 
 - The user's review (numbers from their machine).
-- On the maintainer's transcripts: `file` attachments carry memory files into the context; of 2,115 agent listing lines, 1,630 end in a tool list, 194 in `(Tools: *)`, 194 in "All tools except", 97 have none; 472 tool errors sorted by a fixed list of kinds leave 13% as "other".
+- On the maintainer's transcripts: `file` attachments carry memory files into the context; of 2,115 agent listing lines, 1,630 end in a tool list, 194 in `(Tools: *)`, 194 in "All tools except", 97 have none; 483 tool errors sorted by the fixed list of kinds leave 28% as "other", about a third of them the user's rejections (already in `decision`); looser patterns cut "other" to 13% but mislabeled errors such as a missing model as "file not found".
 - Claude Code docs (memory page): `claudeMdExcludes` takes glob patterns matched against absolute paths, at any settings layer, and cannot exclude a managed CLAUDE.md.
 
 ## Options

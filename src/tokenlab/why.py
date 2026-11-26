@@ -185,9 +185,11 @@ def _norm(path: str) -> str:
 
 
 def project_roots(names: list[str]) -> list[Path]:
-    """The folder of each loaded CLAUDE.md: a memory index or a plugin skill may
-    name files relative to the project it serves, not to its own folder."""
-    return sorted({Path(n).parent for n in names if _norm(n).endswith("/claude.md")})
+    """The project folder of each loaded CLAUDE.md (`./CLAUDE.md` or
+    `./.claude/CLAUDE.md`): a memory index or a plugin skill may name files relative
+    to the project it serves, not to its own folder."""
+    folders = {Path(n).parent for n in names if _norm(n).endswith("/claude.md")}
+    return sorted(f.parent if f.name == ".claude" else f for f in folders)
 
 
 def _owner(name: str) -> str:
