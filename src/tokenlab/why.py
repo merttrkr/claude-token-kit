@@ -184,6 +184,12 @@ def _norm(path: str) -> str:
     return path.replace("\\", "/").lower()
 
 
+def project_roots(names: list[str]) -> list[Path]:
+    """The folder of each loaded CLAUDE.md: a memory index or a plugin skill may
+    name files relative to the project it serves, not to its own folder."""
+    return sorted({Path(n).parent for n in names if _norm(n).endswith("/claude.md")})
+
+
 def _owner(name: str) -> str:
     return name.split(":", 1)[0] if ":" in name else ""
 
@@ -415,7 +421,7 @@ def render(
         wcat[cat] += w
     for tid, seq, kind, name, chars, ts in conn.execute(
         "SELECT thread_id, request_seq, kind, name, chars, ts FROM parts"
-        " WHERE kind != 'command'"
+        " WHERE kind NOT IN ('command', 'attached')"
     ):
         k = carry.after(tid, seq, ts)
         by_cat[CATEGORY[kind]] += k * chars * scale[kind]
@@ -436,6 +442,10 @@ def render(
             skill_calls[str(target).lstrip("/")] += 1
         if name == "Read" and target:
             reads[_norm(str(target))] += 1
+    for (name,) in conn.execute(
+        "SELECT name FROM parts WHERE kind = 'attached' AND ts >= ?", (start,)
+    ):
+        reads[_norm(name)] += 1
     for (name,) in conn.execute(
         "SELECT p.name FROM parts p JOIN requests r ON r.thread_id = p.thread_id"
         " AND r.seq = p.request_seq + 1"
@@ -569,6 +579,22 @@ def render(
                     observed=True,
                 )
 
+    # An agent that is a main thread's only way to a tool the thread lacks (web-fetch
+    # where the session has no WebFetch): hiding it would cut that tool off.
+    only_route: dict[str, str] = {}
+    for agent, tool in conn.execute(
+        "SELECT DISTINCT a.agent, a.tool FROM agent_tools a JOIN threads t"
+        " ON t.thread_id = a.thread_id WHERE t.kind = 'main'"
+        " AND EXISTS (SELECT 1 FROM prefix p WHERE p.thread_id = a.thread_id"
+        " AND p.source = 'tool')"
+        " AND NOT EXISTS (SELECT 1 FROM prefix p WHERE p.thread_id = a.thread_id"
+        " AND p.source = 'tool' AND p.name = a.tool)"
+        " AND NOT EXISTS (SELECT 1 FROM parts d WHERE d.thread_id = a.thread_id"
+        " AND d.kind = 'deferred' AND d.name = a.tool)"
+        " ORDER BY a.agent, a.tool"
+    ):
+        only_route.setdefault(agent, tool)
+
     # S / A: listing lines for skills and agents that were never used.
     for kind, calls, label, fix_own, fix_plugin in (
         (
@@ -615,7 +641,7 @@ def render(
         raw: Counter[str] = Counter()
         cost: dict[str, float] = defaultdict(float)
         for (pk, name), chars in by_part.items():
-            if name in copy_of:
+            if name in copy_of or (pk == "agent" and name in only_route):
                 continue
             if pk == kind and not calls[name] and current(pk, name):
                 groups[_owner(name)].append(name)
@@ -633,6 +659,18 @@ def render(
                 _names(sorted(names)),
                 fix_plugin if owner else fix_own,
             )
+    spare = sorted(n for n in only_route if not agent_calls[n] and current("agent", n))
+    if spare:
+        add(
+            "A",
+            sum(by_part[("agent", n)] for n in spare),
+            sum(wpart[("agent", n)] for n in spare),
+            f"{_n(len(spare), 'agent is', 'agents are')} never used but the only"
+            " way to a tool the main session lacks",
+            _names([f"`{n}` → `{only_route[n]}`" for n in spare]),
+            "keep it, unless you never need that tool",
+            observed=True,
+        )
 
     bodies = {n: c for (k, n), c in wpart.items() if k == "skill_body" and c}
     if bodies:
@@ -648,6 +686,7 @@ def render(
         )
 
     # M: memory index lines whose file was never read.
+    roots = project_roots([n for (k, n) in by_part if k == "file"])
     for (kind, name), chars in sorted(by_part.items()):
         if kind != "file" or not _norm(name).endswith("/memory.md"):
             continue
@@ -663,9 +702,13 @@ def render(
             links = MD_LINK.findall(line)
             if not links:
                 continue
-            if any(not (path.parent / f).exists() for f in links):
+            targets = [
+                next((d / f for d in (path.parent, *roots) if (d / f).exists()), None)
+                for f in links
+            ]
+            if None in targets:
                 missing = (missing[0] + len(line) + 1, missing[1] + links)
-            elif not any(reads[_norm(str(path.parent / f))] for f in links):
+            elif not any(reads[_norm(str(p))] for p in targets):
                 unread = (unread[0] + len(line) + 1, unread[1] + links)
         for (dead_chars, dead), text, fix in (
             (
@@ -675,7 +718,7 @@ def render(
                     "memory index line points",
                     "memory index lines point",
                 )
-                + f" to files never read with Read in {_n(seen, 'day', 'days')}",
+                + f" to files never read or attached in {_n(seen, 'day', 'days')}",
                 "archive them or group them under a one-line summary",
             ),
             (
@@ -715,7 +758,7 @@ def render(
                 sum(written.values()),
                 sum(written.values()),
                 f"{_n(len(written), 'memory file was', 'memory files were')}"
-                " written but never read with Read"
+                " written but never read back"
                 f" in {_n(seen, 'day', 'days')}",
                 _names(sorted(Path(w).name for w in written), 5),
                 "check if it is really needed; if not, narrow the rule that writes it",

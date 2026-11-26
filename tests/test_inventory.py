@@ -11,7 +11,7 @@ import pytest
 from conftest import PROJECT, SONNET, assistant, write_jsonl
 
 from tokenlab import cli, inventory
-from tokenlab.ingest import ingest
+from tokenlab.ingest import error_kind, ingest
 from tokenlab.ledger import create
 from tokenlab.rules import Rules
 
@@ -375,3 +375,84 @@ def test_tools_named_but_not_loaded_and_long_memory_lines(tmp_path: Path) -> Non
     assert "mcp__srv__ping" not in tools and "browser_" not in tools
     records_part = section(text, "### Memory index lines that grew into records")
     assert f"MEMORY.md:3 | {len(long_line):,}" in records_part
+
+
+def test_a_relative_path_may_name_a_file_in_a_loaded_project(tmp_path: Path) -> None:
+    # A memory index and a plugin skill name files from the project they serve,
+    # not from their own folder.
+    memory = tmp_path / "claude" / "projects" / "p" / "memory"
+    memory.mkdir(parents=True)
+    index = memory / "MEMORY.md"
+    index.write_text("# Index\n- [Plan](plans/p.md) — the plan\n", encoding="utf-8")
+    project = tmp_path / "work"
+    (project / "plans").mkdir(parents=True)
+    (project / "plans" / "p.md").write_text("x", encoding="utf-8")
+    (project / "CLAUDE.md").write_text("c", encoding="utf-8")
+    files = [
+        {"path": str(project / "CLAUDE.md"), "type": "Project", "content": "c"},
+        {"path": str(index), "type": "AutoMem", "content": "i" * 900},
+    ]
+    records = [
+        at(
+            {
+                "type": "attachment",
+                "attachment": {"type": "instructions", "files": files},
+                "rendered": [{"content": "i" * 900}],
+            },
+            1,
+            0,
+        ),
+        at(assistant(0, "req_0", SONNET, content=[]), 1, 1),
+    ]
+    root = tmp_path / "t"
+    write_jsonl(root / "proj" / "s.jsonl", records)
+    db = tmp_path / "i.sqlite"
+    ingest(root, db)
+    text, _ = inventory.render(
+        sqlite3.connect(db), root, tmp_path, tmp_path, tmp_path, 30, LOW
+    )
+    assert "plans/p.md" not in section(text, "## 2.")
+
+
+def test_a_piece_gone_from_disk_is_marked_and_left_out_of_the_top(
+    setup: tuple[sqlite3.Connection, Path, Path],
+) -> None:
+    conn, root, home = setup
+    (home / "proj" / ".claude" / "rules" / "r.md").unlink()
+    text, pieces = inventory.render(
+        conn, root, home / "agents", home / "skills", home / "plugins", 30, LOW
+    )
+    top = section(text, "## 1.")
+    assert "| r.md |" not in top and "| CLAUDE.md |" in top
+    assert "1 piece is no longer on disk" in top
+    assert "| r.md | no longer on disk |" in pieces
+
+
+def test_a_recurring_error_shows_its_kinds_never_its_text(
+    setup: tuple[sqlite3.Connection, Path, Path],
+) -> None:
+    added = section(report(setup), "## 4.")
+    assert "| kinds |" in added and "| other ×6 |" in added
+    assert "x" * 50 not in added
+
+
+@pytest.mark.parametrize(
+    ("text", "kind"),
+    [
+        ("Exit code 127\nsecret=abc", "exit code 127"),
+        (
+            "Error: ENOENT: no such file or directory, open 'C:/a/b.md'",
+            "file not found",
+        ),
+        (
+            "File has not been read yet. Read it first before writing to it.",
+            "file not read first",
+        ),
+        ("String to replace not found in file.", "edit text not found"),
+        ("Command timed out after 2m", "timeout"),
+        ("Permission denied (publickey)", "permission denied"),
+        ("something else went wrong: token=abc", "other"),
+    ],
+)
+def test_error_kinds_come_from_a_fixed_list(text: str, kind: str) -> None:
+    assert error_kind(text) == kind

@@ -56,6 +56,8 @@ Actions on a piece: **delete** (fails questions 1–4), **edit** (vague or long 
 | own skill never used | `skillOverrides` in `settings.json`: `"user-invocable-only"` hides it from Claude but keeps `/name`; `"name-only"` keeps it listed without its description; `"off"` hides it from both. Ask the user which |
 | plugin skill never used | `disable-model-invocation: true` in that skill's frontmatter (lost when the plugin updates), or uninstall the plugin |
 | agent never used | own agent: delete its file; built-in: `permissions.deny` with `Agent(<name>)` |
+| agent never used, but the only way to a tool the main session lacks (observation) | keep it, unless the user never needs that tool (e.g. `web-fetch` when the main session has no `WebFetch`) |
+| a CLAUDE.md or rule file that a hook or plugin rewrites (an `AUTO-GENERATED` header, often git-excluded) | an edit does not last: if the user does not need it, add its path to `claudeMdExcludes` in `settings.json` (glob patterns matched against the absolute path, e.g. `"/home/me/repo/.claude/rules/octo-*.md"`; any settings layer, the lists merge; a managed CLAUDE.md cannot be excluded) |
 | recurring general-purpose job, or an outside system the main session reads itself again and again ("Agent candidates" table, verdict "agent candidate") | a named agent, written with `agent.md` |
 | general-purpose job an existing agent covers | sharpen that agent's `description` so it gets picked (`agent.md`, point 1) |
 | verdict in "Existing agents" (retire, merge, narrow tools, errors) | act on that verdict with `agent.md`; retiring = delete its file after the user's yes |

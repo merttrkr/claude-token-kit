@@ -2,6 +2,18 @@
 
 All notable changes to this project. Format: [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## Unreleased
+
+What a second user's review found ([decision 004](docs/decisions/004-second-user-review.md)):
+
+- Windows: a file loaded once as `C:\…\CLAUDE.md` and once as `C:/…/CLAUDE.md` is one piece, not two; its findings and inventory rows no longer show twice.
+- A `MEMORY.md` link, or a path in a plugin skill, may be relative to a loaded project (the folder of a loaded `CLAUDE.md`); it is no longer reported as missing.
+- A memory file that reached the context as an attachment counts as read.
+- Inventory: a piece whose file is gone from disk is marked `no longer on disk` and left out of the top list.
+- An unused agent that is the main session's only way to a tool (e.g. `web-fetch` without `WebFetch`) is an observation, not a hide suggestion.
+- Inventory: recurring tool errors show their kinds (`exit code 1`, `file not found`, …) from a fixed list; the message itself is never stored.
+- File review: asks first whether to apply one change at a time or all at once with everything shown at the end; says its cost up front and offers reading in the session or with parallel readers; proposes `claudeMdExcludes` for files a hook or plugin rewrites.
+
 ## 0.2.6 — 2026-11-19
 
 What a real user's review found the report did not show:

@@ -19,7 +19,7 @@ Each finding shows what it costs, the evidence and a one-sentence fix. Numbers a
 
 - **Reads only on your computer:** your Claude Code history under `~/.claude/projects`, `~/.claude/agents`, `~/.claude/skills` and the memory indexes (`MEMORY.md`) the history names.
 - **Sends nothing.** token-lab itself makes no network calls. Downloads happen only when you install (`uv`) and on the first run (token-lab itself and, if needed, Python). Inside Claude Code, Claude reads the report like any file in your conversation, so the report goes where your Claude conversation goes.
-- **Changes nothing without your yes.** Your settings, CLAUDE.md, memory, skills and agents change only after you see the change and say yes; a backup is kept next to the file (`.bak-token-lab-…`).
+- **Changes nothing without your yes.** Your settings, CLAUDE.md, memory, skills and agents change only after you say yes: to each change, or once to "do it all and show me at the end"; a backup is kept next to the file (`.bak-token-lab-…`).
 - **Its own files:** one line of numbers per run in `~/.claude/token-lab/history.jsonl` for the trend (no names, paths or text; `--no-history` turns it off), and temporary files it deletes. The full list is in [SECURITY.md](SECURITY.md).
 - **Leaves nothing running:** no hook, no background program, no scheduled task.
 
@@ -100,7 +100,8 @@ The report measures; this review reads. Claude goes through the files that enter
 - A script first lists what it can check for sure: paths that no longer exist, sentences the system prompt already says, files that share the same lines.
 - The report leads into it: after the summary Claude offers to go on with your files. You can also start it directly.
 - Claude asks which files to start with and whether to look at your past conversations for what to add.
-- Changes are applied one at a time, each with a diff, a backup and your yes.
+- First Claude asks how to apply: one at a time (each with a diff, a backup and your yes) or all at once, with every file backed up and every change shown at the end.
+- It says up front roughly what the review costs, and lets you read in this session (cheaper) or with parallel readers (faster).
 
 ## Your own rules
 

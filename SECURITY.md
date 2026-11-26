@@ -11,14 +11,14 @@ Do not open a public issue for a vulnerability.
 - The install scripts (`install.ps1`, `install.sh`).
 - Auto-update (the change the installers make to `known_marketplaces.json`).
 - The report and `tokenlab inventory`, which read your local transcripts.
-- The optimize skill, which changes files after you say yes.
+- The optimize skill, which changes files after you say yes (to each change, or once to apply them all).
 
 ## What the tool promises
 
 For the supported commands (`why`, `inventory`) and the two skills:
 
 - They read local files only and make no network calls. The only download is uvx's first-run install.
-- They never change your files (settings, CLAUDE.md, rules, memory, skills, agents) without a diff and your yes.
+- They never change your files (settings, CLAUDE.md, rules, memory, skills, agents) without your yes: to each diff, or once to the apply-all mode, which backs up every file first and shows every diff at the end.
 - Their own writes, all of them:
   - `why`: a temporary database, deleted after the run; one line of numbers per run in `~/.claude/token-lab/history.jsonl` (`--no-history` turns it off).
   - `inventory`: `inventory.md`, `pieces.md` and `system-prompt.md` in a new temporary folder, or in the folder given with `--out` (files of those names there are replaced); it deletes its own leftover temporary folders (only those three files, older than 6 hours).

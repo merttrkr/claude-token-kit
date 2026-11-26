@@ -23,7 +23,14 @@ from datetime import datetime
 from pathlib import Path
 
 from tokenlab.rules import DEFAULT, Rules
-from tokenlab.why import Carry, _n, _window, tokens_per_char, weighted
+from tokenlab.why import (
+    Carry,
+    _n,
+    _window,
+    project_roots,
+    tokens_per_char,
+    weighted,
+)
 
 KIND = {"file": "file", "rule": "rule", "skill": "skill", "agent": "agent"}
 BACKTICK = re.compile(r"`([^`\n]+)`")
@@ -84,9 +91,10 @@ def _norm(sentence: str) -> str:
     return " ".join(s.split()).rstrip(".:;")
 
 
-def _exists(ref: str, base: Path) -> bool:
-    """A relative path is looked up in the piece's folder and three folders up: a
-    rule under `.claude/rules/` names files from its project root."""
+def _exists(ref: str, base: Path, roots: list[Path]) -> bool:
+    """A relative path is looked up in the piece's folder and three folders up (a
+    rule under `.claude/rules/` names files from its project root), then in each
+    loaded project (a memory index or a plugin skill names files from there)."""
     ref = ref.split("#", 1)[0]  # a heading anchor
     m = GIT_BASH_DRIVE.match(ref)
     if m and os.name == "nt":
@@ -94,7 +102,7 @@ def _exists(ref: str, base: Path) -> bool:
     path = Path(ref).expanduser()
     if path.is_absolute():
         return path.exists()
-    return any((d / path).exists() for d in (base, *list(base.parents)[:3]))
+    return any((d / path).exists() for d in (base, *list(base.parents)[:3], *roots))
 
 
 def _is_path(ref: str, link: bool = False) -> bool:
@@ -205,11 +213,13 @@ def render(
         for key in cost
     }
     ranked = sorted(cost, key=lambda k: (-cost[k], k))
+    # A file or rule deleted since: its cost was paid, but there is nothing to review.
+    gone = {k for k in ranked if k[0] in ("file", "rule") and not Path(k[1]).is_file()}
     header = (
         "| kind | name | file | characters | weekly cost (input-equivalent tokens)"
         " | use |"
     )
-    rows: list[str] = []
+    row: dict[tuple[str, str], str] = {}
     for key in ranked:
         kind, name = key
         path = files[key]
@@ -221,10 +231,13 @@ def render(
             except (OSError, UnicodeDecodeError):
                 pass
         used = _n(uses[key], "call", "calls") if kind in ("skill", "agent") else "-"
-        rows.append(
-            f"| {KIND[kind]} | {label} | {path or 'built-in / not found'}"
+        place = "no longer on disk" if key in gone else path or "built-in / not found"
+        row[key] = (
+            f"| {KIND[kind]} | {label} | {place}"
             f" | {chars:,} | {int(cost[key] * week * tpc):,} | {used} |"
         )
+    rows = [row[k] for k in ranked]
+    kept = [k for k in ranked if k not in gone]
     all_pieces = (
         "\n".join(
             [
@@ -248,15 +261,22 @@ def render(
         header,
         "|---|---|---|---|---|---|",
     ]
-    lines += rows[:MAX_PIECES]
+    lines += [row[k] for k in kept[:MAX_PIECES]]
 
-    rest = ranked[MAX_PIECES:]
+    rest = kept[MAX_PIECES:]
     if rest:
         lines += [
             "",
             f"+{len(rest)} more pieces,"
             f" {int(sum(cost[k] for k in rest) * week * tpc):,} tokens a week in total;"
             " all of them are in `pieces.md`.",
+        ]
+    if gone:
+        lines += [
+            "",
+            f"{_n(len(gone), 'piece is', 'pieces are')} no longer on disk,"
+            f" {int(sum(cost[k] for k in gone) * week * tpc):,} tokens a week in"
+            " this window: already removed, nothing to review; marked in `pieces.md`.",
         ]
 
     # 2-3. What a script can check for sure in the piece files.
@@ -279,6 +299,7 @@ def render(
     }
     unloaded: dict[str, list[str]] = defaultdict(list)
     records: list[tuple[str, int]] = []
+    roots = project_roots([n for (k, n) in cost if k == "file"])
     for _, path in readable:
         try:
             body = path.read_text(encoding="utf-8")
@@ -288,7 +309,7 @@ def render(
             refs = [(r, False) for r in BACKTICK.findall(line)]
             refs += [(r, True) for r in MD_TARGET.findall(line)]
             for ref, link in refs:
-                if _is_path(ref, link) and not _exists(ref, path.parent):
+                if _is_path(ref, link) and not _exists(ref, path.parent, roots):
                     missing.append((f"{path}:{i}", ref))
             if loaded:
                 for tool in TOOL_REF.findall(line):
@@ -407,13 +428,15 @@ def render(
     # 4. What could be added.
     lines += ["", "## 4. Could be added (candidates)", ""]
     errors: dict[str, list[tuple[str, str, str]]] = defaultdict(list)
-    for tool, sid, ts, file in conn.execute(
-        "SELECT c.tool, t.session_id, c.ts, t.file FROM content c JOIN threads t"
-        " ON t.thread_id = c.thread_id WHERE c.kind = 'tool_result'"
+    kinds: dict[str, Counter[str]] = defaultdict(Counter)
+    for tool, sid, ts, file, kind in conn.execute(
+        "SELECT c.tool, t.session_id, c.ts, t.file, c.error_kind FROM content c"
+        " JOIN threads t ON t.thread_id = c.thread_id WHERE c.kind = 'tool_result'"
         " AND c.is_error = 1 AND c.ts >= ? ORDER BY c.ts, t.file",
         (start,),
     ):
         errors[tool or "?"].append((sid, ts, file))
+        kinds[tool or "?"][kind or "other"] += 1
     recurring = {
         tool: got
         for tool, got in errors.items()
@@ -424,20 +447,25 @@ def render(
     lines += [
         "### Recurring tool errors (hook candidates)",
         "",
-        "The error message is not in the ledger; read the example places, and if there"
-        " is a pattern a machine can check, it becomes a hook or a permission rule.",
+        "Kinds come from a fixed list; the error message itself is never stored. For"
+        " more, read the example places. If there is a pattern a machine can check, it"
+        " becomes a hook or a permission rule.",
         "",
     ]
     if recurring:
-        lines += ["| tool | errors | sessions | days | example (transcript · time) |"]
-        lines += ["|---|---|---|---|---|"]
+        lines += [
+            "| tool | errors | sessions | days | kinds | example (transcript · time) |"
+        ]
+        lines += ["|---|---|---|---|---|---|"]
         for tool, got in sorted(recurring.items(), key=lambda kv: (-len(kv[1]), kv[0]))[
             :MAX_ROWS
         ]:
+            common = sorted(kinds[tool].items(), key=lambda kv: (-kv[1], kv[0]))[:3]
             examples = "; ".join(f"{f} · {ts}" for _, ts, f in got[-3:])
             lines.append(
                 f"| {tool} | {len(got)} | {len({g[0] for g in got})}"
-                f" | {len({g[1][:10] for g in got})} | {examples} |"
+                f" | {len({g[1][:10] for g in got})}"
+                f" | {', '.join(f'{k} ×{n}' for k, n in common)} | {examples} |"
             )
     else:
         lines.append("None.")

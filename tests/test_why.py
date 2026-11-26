@@ -906,3 +906,122 @@ def test_a_copy_below_the_cutoff_still_counts_as_unused(tmp_path: Path) -> None:
     (tmp_path / "again").mkdir()
     rows = finding(why.render(_corpus(tmp_path / "again", records), 30, mid), "S")
     assert any("plugin `plug`: 2 skills" in r for r in rows)
+
+
+def test_a_memory_link_may_be_relative_to_the_project(tmp_path: Path) -> None:
+    memory = tmp_path / "claude" / "projects" / "p" / "memory"
+    memory.mkdir(parents=True)
+    index = memory / "MEMORY.md"
+    index.write_text("# Index\n- [Plan](plans/p.md) — the plan\n", encoding="utf-8")
+    project = tmp_path / "work"
+    (project / "plans").mkdir(parents=True)
+    (project / "plans" / "p.md").write_text("x", encoding="utf-8")
+    (project / "CLAUDE.md").write_text("c", encoding="utf-8")
+    files = [
+        {"path": str(project / "CLAUDE.md"), "type": "Project", "content": "c" * 400},
+        {"path": str(index), "type": "AutoMem", "content": "i" * 600},
+    ]
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            att("instructions", 0, files=files),
+            at(assistant(0, "req_0", SONNET, content=[], input_tokens=4000), 1),
+            at(assistant(0, "req_1", SONNET, content=[], read=4000), 2),
+        ],
+    )
+    db = tmp_path / "ledger.sqlite"
+    ingest(root, db)
+    rows = finding(why.render(sqlite3.connect(db), 30, LOW), "M")
+    assert not [r for r in rows if "missing files" in r]
+    assert [r for r in rows if "never read" in r and "plans/p.md" in r]
+
+
+def test_a_memory_file_attached_in_the_window_counts_as_read(tmp_path: Path) -> None:
+    memory = tmp_path / "memory"
+    memory.mkdir()
+    index = memory / "MEMORY.md"
+    index.write_text(
+        "# Index\n- [Now](now.md) — attached\n- [Old](old.md) — long ago\n"
+        "- [Never](never.md) — idle\n",
+        encoding="utf-8",
+    )
+    for name in ("now.md", "old.md", "never.md"):
+        (memory / name).write_text("x", encoding="utf-8")
+
+    def attached(name: str, when: str) -> dict[str, Any]:
+        rec = att("file", 0, filename=str(memory / name), content={"text": "x"})
+        return {**rec, "timestamp": when}
+
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            attached("old.md", "2026-08-01T10:00:00.000Z"),
+            att(
+                "instructions",
+                0,
+                files=[{"path": str(index), "type": "AutoMem", "content": "i" * 600}],
+            ),
+            at(assistant(0, "req_0", SONNET, content=[], input_tokens=4000), 1),
+            attached("now.md", "2026-10-01T10:01:30.000Z"),
+            at(assistant(0, "req_1", SONNET, content=[], read=4000), 2),
+        ],
+    )
+    db = tmp_path / "ledger.sqlite"
+    ingest(root, db)
+    unread = [
+        r
+        for r in finding(why.render(sqlite3.connect(db), 30, LOW), "M")
+        if "never read" in r
+    ]
+    assert len(unread) == 1
+    assert "never.md" in unread[0] and "old.md" in unread[0]
+    assert "now.md" not in unread[0]
+
+
+def test_an_unused_agent_that_is_the_only_way_to_a_tool_is_kept(
+    tmp_path: Path,
+) -> None:
+    shape = {
+        "type": "api-request-shape",
+        "shapeHash": "h1",
+        "shape": {
+            "system": [{"type": "text", "text": "s" * 400}],
+            "tools": [{"name": "Read", "description": "r" * 300}],
+        },
+    }
+    lines = {
+        "fetcher": "- fetcher: reads web pages (Tools: WebFetch)",
+        "reader": "- reader: reads files (Tools: Read)",
+        "anything": "- anything: does all (Tools: *)",
+        "most": "- most: does most (Tools: All tools except Agent, Edit)",
+        "plug:fetch": "- plug:fetch: reads pages (Tools: WebFetch, Read)",
+    }
+    root = tmp_path / "corpus"
+    write_jsonl(
+        root / PROJECT / f"{MAIN}.jsonl",
+        [
+            att(
+                "agent_listing_delta",
+                0,
+                addedTypes=list(lines),
+                addedLines=list(lines.values()),
+            ),
+            at(shape, 0),
+            at(assistant(0, "req_0", SONNET, content=[], input_tokens=4000), 1),
+            at(assistant(0, "req_1", SONNET, content=[], read=4000), 2),
+        ],
+    )
+    db = tmp_path / "ledger.sqlite"
+    ingest(root, db)
+    text = why.render(sqlite3.connect(db), 30, LOW)
+    unused = " ".join(r for r in finding(text, "A") if "listed but never used" in r)
+    assert "reader" in unused and "anything" in unused and "most" in unused
+    assert "fetcher" not in unused and "plug:fetch" not in unused
+    kept = [r for r in text.splitlines() if r.startswith("Observation (agents)")]
+    assert len(kept) == 1 and "only way to a tool" in kept[0]
+    assert (
+        "`fetcher` → `WebFetch`" in kept[0] and "`plug:fetch` → `WebFetch`" in kept[0]
+    )
+    assert "not counted as cuttable" in kept[0]

@@ -10,9 +10,9 @@ Claude Code users pay for tokens they cannot see. This tool shows, from the user
 
 ## 1. Trust and ethics first
 
-- **Rule:** the tool sends nothing over the network. It writes the user's files only after the user sees the diff and says yes; its own writes (history, temp folders) are listed in [SECURITY.md](SECURITY.md). Every number says where it comes from and what it leaves out. Transcripts hold other people's words (colleagues, customers): read the least, never copy transcript text into a report, an issue, a test or this repo.
+- **Rule:** the tool sends nothing over the network. It writes the user's files only after the user says yes: to each diff, or once, up front, to the mode that applies every change and shows all diffs at the end (every file backed up first, each change listed with its backup); its own writes (history, temp folders) are listed in [SECURITY.md](SECURITY.md). Every number says where it comes from and what it leaves out. Transcripts hold other people's words (colleagues, customers): read the least, never copy transcript text into a report, an issue, a test or this repo.
 - **Why:** the tool reads the most private data a developer has. One wrong number or one unasked write ends the trust.
-- **Check:** `tests/conftest.py::_no_network`, `_no_home_history`; `tests/test_why.py::test_each_run_adds_its_numbers_to_the_history` (numbers only); the skills' diff-and-yes steps. PR question: "Does this change what is read, written or sent?" Planned: project exclusion and a consent note before optimize reads transcripts.
+- **Check:** `tests/conftest.py::_no_network`, `_no_home_history`; `tests/test_why.py::test_each_run_adds_its_numbers_to_the_history` (numbers only); the skills' diff-and-yes steps and the optimize mode question. PR question: "Does this change what is read, written or sent?" Planned: project exclusion and a consent note before optimize reads transcripts.
 - **Exception:** none.
 
 ## 2. Measure the user's outcome, not the features
@@ -68,7 +68,7 @@ Claude Code users pay for tokens they cannot see. This tool shows, from the user
 
 - No telemetry, and no network calls from the supported commands or the skills. (The research commands `probe` and `otel-sink` run `claude` and listen on a local port; they are not supported for users.)
 - Nothing left running on the user's machine: no hook, no background program, no scheduled task.
-- No write to a user's file without a diff and a yes.
+- No write to a user's file without a yes: to its diff, or to the apply-all mode, which backs up every file and shows every diff at the end.
 - No support for the research commands.
 - No transcript text, personal data, company data or real paths in this repo, its tests or its issues.
 

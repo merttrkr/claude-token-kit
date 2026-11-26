@@ -57,7 +57,9 @@ CREATE TABLE content (
     brief INTEGER,                   -- Agent tool_use only: characters of the prompt
     -- tool_use only, hashes never text: Edit old>new, Write content, shell command
     fingerprint TEXT,
-    background INTEGER               -- Agent tool_use only: run_in_background
+    background INTEGER,              -- Agent tool_use only: run_in_background
+    -- tool_result with is_error only: a kind from ingest.ERROR_KINDS, never the text
+    error_kind TEXT
 );
 CREATE TABLE turns (
     -- a user-role record that is not a tool result; its text is never stored
@@ -88,10 +90,18 @@ CREATE TABLE parts (
     -- file (CLAUDE.md, memory) | skill (listing line) | agent (listing line)
     -- | mcp (server instructions) | deferred (tool name line) | rule (nested memory)
     -- | skill_body (invoked skill) | command (slash command the user typed)
+    -- | attached (a file attachment: a read signal, not split into cost)
     kind TEXT NOT NULL,
     name TEXT NOT NULL,              -- path, or skill / agent / server / tool name
     chars INTEGER NOT NULL,
     ts TEXT                          -- record time: orders it against compactions
+);
+CREATE TABLE agent_tools (
+    -- the tools an agent listing line names (`(Tools: …)`), names only;
+    -- none for `*` or "All tools except …"
+    thread_id TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    tool TEXT NOT NULL
 );
 CREATE TABLE events (
     thread_id TEXT NOT NULL,
@@ -159,6 +169,7 @@ TABLE_ORDER = {
     "turns": "thread_id, request_seq, ts, kind, chars, source",
     "prefix": "thread_id, request_seq, source, name, chars",
     "parts": "thread_id, request_seq, kind, name, chars, ts",
+    "agent_tools": "thread_id, agent, tool",
     "events": "thread_id, ts, subtype",
     "cost_state": "session_id, start_time, model",
     "otel_requests": "session_id, ts, seq",

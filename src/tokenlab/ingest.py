@@ -78,6 +78,35 @@ TURN_PREFIXES = (
 )
 # A slash command (skill, plugin skill or built-in) as the user message records it.
 SLASH_COMMAND = re.compile(r"<command-name>/([^<\s]+)</command-name>")
+# A tool error's kind from a fixed list, never its text: an error message can hold
+# secrets or other people's words. First match wins. On 472 errors in the
+# maintainer's transcripts (2026-11) 13% fell into "other". Hook blocks and the
+# user's rejections are in `decision` already.
+ERROR_KINDS = [
+    ("file not read first", re.compile(r"has not been read yet", re.I)),
+    ("file changed since read", re.compile(r"modified since .{0,20}read", re.I)),
+    ("edit text not found", re.compile(r"string to replace not found", re.I)),
+    (
+        "file not found",
+        re.compile(
+            r"no such file|does not exist|enoent|cannot find the (?:path|file)", re.I
+        ),
+    ),
+    (
+        "permission denied",
+        re.compile(r"permission denied|access is denied|eacces", re.I),
+    ),
+    ("command not found", re.compile(r"command not found|is not recognized as", re.I)),
+    ("timeout", re.compile(r"timed? ?out", re.I)),
+    ("too large", re.compile(r"exceeds|too large|too long", re.I)),
+    (
+        "invalid input",
+        re.compile(r"inputvalidationerror|invalid (?:input|param)", re.I),
+    ),
+    ("exit code", re.compile(r"exit code \d{1,3}\b", re.I)),
+]
+# The tools an agent listing line names at its end: "- name: … (Tools: Read, Grep)".
+AGENT_TOOLS = re.compile(r"\(Tools: ([^()]*)\)\s*$")
 ORIGIN_KINDS = frozenset({"human", "peer", "task_notification"})
 # A human turn that opens like this, or says one of the CORRECTION_ANY phrases, is
 # counted as a correction. A rough proxy, read together with interrupts and
@@ -124,6 +153,35 @@ def _pairs(a: dict[str, Any], names: str, texts: str) -> list[tuple[str, int]]:
     ]
 
 
+def _path(p: Any) -> str:
+    """A Windows path is one file whatever its slashes: `C:\\r\\x.md` → `C:/r/x.md`."""
+    s = str(p)
+    return s.replace("\\", "/") if re.match(r"^[A-Za-z]:[\\/]", s) else s
+
+
+def error_kind(text: str) -> str:
+    """`exit code 1`, `file not found`, … or `other`: a name from `ERROR_KINDS`."""
+    for name, pattern in ERROR_KINDS:
+        if m := pattern.search(text):
+            return m.group(0).lower() if name == "exit code" else name
+    return "other"
+
+
+def agent_tools(a: dict[str, Any]) -> list[tuple[str, str]]:
+    """(agent, tool) from each agent listing line's `(Tools: …)` tail, names only.
+    `*` and `All tools except …` give none: that agent has what the session has."""
+    if a.get("type") != "agent_listing_delta":
+        return []
+    out: list[tuple[str, str]] = []
+    for name, line in zip(
+        a.get("addedTypes") or [], a.get("addedLines") or [], strict=False
+    ):
+        m = AGENT_TOOLS.search(line) if isinstance(line, str) else None
+        if m and m.group(1).strip() != "*" and not m.group(1).startswith("All tools"):
+            out += [(str(name), t.strip()) for t in m.group(1).split(",") if t.strip()]
+    return out
+
+
 def parts(a: dict[str, Any]) -> list[tuple[str, str, int]]:
     """(kind, name, chars) for each file, skill, agent, server or tool an attachment
     carries; [] for kinds that carry one thing. Chars are the part's own text, so
@@ -131,10 +189,14 @@ def parts(a: dict[str, Any]) -> list[tuple[str, str, int]]:
     kind = a.get("type")
     if kind == "instructions":
         return [
-            ("file", str(f.get("path")), len(f.get("content") or ""))
+            ("file", _path(f.get("path")), len(f.get("content") or ""))
             for f in a.get("files") or []
             if isinstance(f, dict)
         ]
+    if kind == "file":
+        # A file Claude Code attached on its own or from an @-mention: it reached
+        # the context. A read signal only; its cost is not split out here.
+        return [("attached", _path(a.get("filename")), text_len(a.get("content")))]
     if kind == "skill_listing":
         # "- name: description"; a plugin skill's name has its own colon
         # ("- plug:gamma: ..."), so the name ends at the first ": ".
@@ -153,7 +215,7 @@ def parts(a: dict[str, Any]) -> list[tuple[str, str, int]]:
     if kind == "nested_memory":
         body = a.get("content")
         text = body.get("content") if isinstance(body, dict) else body
-        return [("rule", str(a.get("path")), len(text or ""))]
+        return [("rule", _path(a.get("path")), len(text or ""))]
     if kind == "hook_additional_context":
         body = a.get("content") or []
         text = sum(len(x) for x in body if isinstance(x, str))
@@ -403,6 +465,11 @@ class Ingest:
                             "INSERT INTO parts VALUES (?,?,?,?,?,?)",
                             (t.thread_id, t.last_seq, *part, rec.get("timestamp")),
                         )
+                    for pair in agent_tools(rec["attachment"]):
+                        self.conn.execute(
+                            "INSERT INTO agent_tools VALUES (?,?,?)",
+                            (t.thread_id, *pair),
+                        )
                 elif kind == "api-request-shape":
                     self._shape(t, rec)
                 elif kind == "system" and rec.get("subtype") in EVENT_SUBTYPES:
@@ -485,7 +552,7 @@ class Ingest:
                     else None
                 )
                 self.conn.execute(
-                    "INSERT INTO content VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                    "INSERT INTO content VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                     (
                         t.thread_id,
                         req.seq,
@@ -500,6 +567,7 @@ class Ingest:
                         brief,
                         fingerprint(name, inp),
                         background,
+                        None,
                     ),
                 )
 
@@ -557,7 +625,7 @@ class Ingest:
             t.seen_tool_results.add(tid)
             name, target = t.tools.get(tid, (None, None))
             self.conn.execute(
-                "INSERT INTO content VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                "INSERT INTO content VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (
                     t.thread_id,
                     t.last_seq,
@@ -572,6 +640,9 @@ class Ingest:
                     None,
                     None,
                     None,
+                    error_kind(plain(block.get("content")))
+                    if block.get("is_error")
+                    else None,
                 ),
             )
 

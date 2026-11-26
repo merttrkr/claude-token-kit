@@ -91,3 +91,28 @@ def test_attachments_split_into_parts(tmp_path: Path) -> None:
         (0, "rule", "/r/.claude/rules/x.md", 70),
         (0, "skill_body", "alpha", 300),
     ]
+
+
+def test_a_windows_path_is_one_part_whatever_its_slashes(tmp_path: Path) -> None:
+    root = tmp_path / "corpus"
+    records: list[dict[str, Any]] = []
+    for n, sep in enumerate(("\\", "/"), 1):
+        records += [
+            att(
+                "instructions",
+                files=[{"path": f"C:{sep}r{sep}CLAUDE.md", "content": "a"}],
+            ),
+            att(
+                "nested_memory",
+                path=f"C:{sep}r{sep}x.md",
+                content={"content": "c"},
+            ),
+            assistant(n + 1, f"req_{n}", SONNET, content=[], input_tokens=5),
+        ]
+    write_jsonl(root / PROJECT / f"{SESSION}.jsonl", records)
+    db = tmp_path / "ledger.sqlite"
+    ingest(root, db)
+    names = sqlite3.connect(db).execute(
+        "SELECT DISTINCT name FROM parts WHERE kind IN ('file', 'rule') ORDER BY name"
+    )
+    assert names.fetchall() == [("C:/r/CLAUDE.md",), ("C:/r/x.md",)]

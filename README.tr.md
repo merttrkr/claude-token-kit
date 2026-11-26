@@ -19,7 +19,7 @@ Her bulgunun yanında ne kadar tuttuğu, kanıtı ve tek cümlelik çözümü ya
 
 - **Yalnızca senin bilgisayarında okur:** `~/.claude/projects` altındaki Claude Code geçmişin, `~/.claude/agents`, `~/.claude/skills` ve geçmişte adı geçen hafıza dizinleri (`MEMORY.md`).
 - **Bir şey göndermez.** token-lab'in kendisi ağa çıkmaz. İndirme yalnızca kurulumda (`uv`) ve ilk çalıştırmada (token-lab'in kendisi, gerekirse Python) olur. Claude Code içinde Claude raporu konuşmandaki herhangi bir dosya gibi okur; yani rapor Claude konuşman nereye gidiyorsa oraya gider.
-- **Onayın olmadan hiçbir şeyi değiştirmez.** Ayarların, CLAUDE.md, hafıza, skill'ler ve ajanlar ancak değişikliği görüp onay verdiğinde değişir; dosyanın yanında yedek kalır (`.bak-token-lab-…`).
+- **Onayın olmadan hiçbir şeyi değiştirmez.** Ayarların, CLAUDE.md, hafıza, skill'ler ve ajanlar ancak onay verdiğinde değişir: her değişikliğe tek tek ya da bir kez "hepsini yap, sonda göster"e; dosyanın yanında yedek kalır (`.bak-token-lab-…`).
 - **Kendi dosyaları:** trend için her çalıştırmada `~/.claude/token-lab/history.jsonl` dosyasına bir satır rakam (ad, yol ya da metin yok; `--no-history` kapatır) ve sonra sildiği geçici dosyalar. Tam liste [SECURITY.md](SECURITY.md)'de.
 - **Arkada çalışan bir şey bırakmaz:** hook, arka plan programı, zamanlanmış görev yok.
 
@@ -100,7 +100,8 @@ Rapor ölçer; bu inceleme okur. Claude bağlamına giren dosyaları (CLAUDE.md'
 - Önce bir betik kesin olarak kontrol edilebilenleri listeler: artık olmayan yollar, system prompt'un zaten söylediği cümleler, aynı satırları paylaşan dosyalar.
 - Rapor buna götürür: özetten sonra Claude dosyalarınla devam etmeyi önerir. İstersen doğrudan da başlatabilirsin.
 - Claude hangi dosyalarla başlayacağını ve eklenebilecekler için geçmiş konuşmalarına bakıp bakmayacağını sorar.
-- Değişiklikler tek tek uygulanır; her birinde fark gösterilir, yedek alınır, onayın istenir.
+- Claude önce nasıl uygulayacağını sorar: tek tek (her birinde fark, yedek ve onayın) ya da hepsi birden (her dosyanın yedeği alınır, bütün değişiklikler sonda gösterilir).
+- İncelemenin kabaca maliyetini baştan söyler; bu oturumda (daha ucuz) ya da paralel okuyucularla (daha hızlı) okumayı sana bırakır.
 
 ## Kendi kuralların
 

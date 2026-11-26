@@ -1,14 +1,21 @@
 ---
 name: optimize
-description: File review. Goes through the user's most expensive loaded files (CLAUDE.md, rules, memory, skills, agents) against the placement standard, proposes delete, shorten, move and add changes and applies each after a yes; runs through /token-lab:optimize or after the token-lab report.
+description: File review. Goes through the user's most expensive loaded files (CLAUDE.md, rules, memory, skills, agents) against the placement standard, proposes delete, shorten, move and add changes and applies each after a yes, or all of them at once if the user picks that mode; runs through /token-lab:optimize or after the token-lab report.
 disable-model-invocation: true
 ---
 
 # File review
 
-You read the pieces that enter the user's context, most expensive first, against the placement standard, propose changes line by line and apply them with a yes. How this differs from the report (`/token-lab:token-lab`): the report measures cost, this review reads the lines. You agree the scope with the user. You never change a file on your own.
+You read the pieces that enter the user's context, most expensive first, against the placement standard, propose changes line by line and apply them with a yes. How this differs from the report (`/token-lab:token-lab`): the report measures cost, this review reads the lines. You agree the scope with the user. You change a file only after the user's yes: to its diff, or to the apply-all mode they picked in step 0.
 
 Speak the user's language: the inventory and these instructions are in English; translate what you say. Assume the user is not technical; explain a term the first time in one everyday sentence.
+
+## 0. Ask the mode
+
+Before anything else, one question in the user's language: "Shall I go one change at a time, each with your yes, or make all the changes myself and show you everything at the end? (Every file is backed up first either way.)" Default: one at a time.
+
+- **One at a time:** steps 1–7 as written.
+- **All at the end:** the user's answer is the yes for every change. Ask nothing more: the scope is the default one (step 2, without the conversation reading), the reading is as in step 3, and step 6 applies everything (6b). Tell the user the cost estimate (step 2.3) in one line and start.
 
 ## 1. Build the inventory
 
@@ -22,10 +29,10 @@ uvx --from "${CLAUDE_PLUGIN_ROOT}" tokenlab inventory [--rules ~/.claude/token-l
 - If `inventory.md` says "No Claude Code requests yet", tell the user and stop.
 - If `uvx` is not found, say "Install uv first, then reopen Claude." and give the command for the user's OS, then stop (Windows: `winget install astral-sh.uv`; macOS / Linux: `curl -LsSf https://astral.sh/uv/install.sh | sh`).
 - The inventory only reads and makes no network calls. Its sections:
-  1. **Pieces:** each piece's file, size, weekly cost and use.
+  1. **Pieces:** each piece's file, size, weekly cost and use. A piece whose file is no longer on disk is left out and summed in one line: it is already removed, so it is not in scope.
   2. **Stale references:** paths that are not on disk, and MCP tools your files name that are never loaded (a line that tells Claude to use one cannot be followed; a line that only mentions it is fine). A script result, sure.
   3. **Repeated lines:** sentences the system prompt already says, `MEMORY.md` lines that grew from a pointer into a record, and pairs of files that share sentences. A script result, sure.
-  4. **Could be added:** recurring tool errors, files re-read across sessions, where the corrections are. These are candidates; reading decides.
+  4. **Could be added:** recurring tool errors with their kinds (from a fixed list; the message is never stored), files re-read across sessions, where the corrections are. These are candidates; reading decides.
 
 ## 2. Agree the scope
 
@@ -33,7 +40,8 @@ In the user's language, short:
 
 1. How many pieces there are, which are the 10 most expensive (section 1), how many sure findings sections 2–3 have, how many candidates section 4 has.
 2. One question in two parts: "I'll start with the 10 most expensive files and the sure findings. Shall I also look at the places in your past conversations where errors and corrections repeat, to suggest what to add?" The user may widen the scope (from `pieces.md`), narrow it, or refuse the conversation reading; do step 4 only if they say yes.
-3. If the user asks what the review costs, give a rough estimate: the characters to read (the pieces, plus `placement.md` and `system-prompt.md` once per reader, plus conversation excerpts) ÷ 4 ≈ tokens, output extra. Do not bring it up otherwise.
+3. Always say what the review costs, as a range: the characters to read (the pieces, plus `placement.md` and `system-prompt.md` once per reader, plus conversation excerpts) ÷ 4 ≈ tokens is the floor for reading in this session. Parallel readers each send their context again on every step, so they cost several times more: one user's run with 4 parallel readers used about 830 thousand tokens.
+4. In the same message, ask how to read (one at a time mode only): "in this session (cheaper, slower) or with parallel readers (faster, costs more)?" Default: parallel readers when more than 3 pieces are in scope.
 
 Pieces that come from a plugin (under `~/.claude/plugins/cache/...`) go back to their old form when the plugin updates. For them, propose hiding or turning off rather than editing, and tell the user so.
 
@@ -44,7 +52,8 @@ First read `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/placement.md`. The
 - Read the file. Judge each line or block with the standard's six questions; for the global `~/.claude/CLAUDE.md` also apply the six conditions.
 - Answer "Does Claude do this already?" by looking at `system-prompt.md`: if the same thing is written there, the line is needless. If it is not there, do not lean on a default you think you know; say "could not be verified".
 - Use the lines in sections 2 and 3 of the inventory as facts; do not argue them again.
-- If more than 3 pieces are in scope, split the reading across parallel read-only agents (one per piece or small groups). Give each agent the piece's path, the paths of `placement.md` and `system-prompt.md`, and the inventory lines for that file. Agents change no file; they only return the table below.
+- A file that says it is generated (an `AUTO-GENERATED` header, or a hook or plugin rewrites it) loses any edit on the next run: propose `claudeMdExcludes` from the placement table instead of line edits.
+- If the user chose parallel readers (step 2.4; in the all-at-the-end mode, when more than 3 pieces are in scope), split the reading across parallel read-only agents (one per piece or small groups). Give each agent the piece's path, the paths of `placement.md` and `system-prompt.md`, and the inventory lines for that file. Agents change no file; they only return the table below.
 
 When the readings are done, you, in the main session, read the returned tables together: add findings for rules that contradict each other across files and for lines that say the same thing in other words (the script only finds identical sentences).
 
@@ -55,7 +64,7 @@ One row per finding:
 
 ## 4. Judge what could be added
 
-- **Recurring tool errors:** open the example places in the inventory (search the transcript file for that time) and see the error and the command that produced it. If a pattern a machine can check keeps coming back, propose a hook or a permission rule (the hook row of the placement table); otherwise a one-line rule in the right place.
+- **Recurring tool errors:** start from the kinds column. If the kind does not say enough, open the example places in the inventory (search the transcript file for that time) and see the error and the command that produced it. If a pattern a machine can check keeps coming back, propose a hook or a permission rule (the hook row of the placement table); otherwise a one-line rule in the right place.
 - **Files re-read across sessions:** if needed in every session, a memory line or a pointer in CLAUDE.md ("read Y before X"); if needed only for one job, a reference in that job's skill.
 - **Corrections:** read each listed message in its transcript together with the Claude answer before it. Group the recurring corrections and propose a rule in the cheapest place where it triggers. Add nothing for one-off ones.
 - Copy no transcript text anywhere; only summarise it briefly in the suggestion.
@@ -64,9 +73,11 @@ One row per finding:
 
 - Merge all findings into one list. Order: cost effect (the piece's weekly cost × the share of lines affected); on a tie, sure findings first.
 - Show the first 10 in plain words: what, why, where it goes, its effect. Explain a technical term in one word.
-- One question: "Shall we start with the first one?"
+- One question: "Shall we start with the first one?" In the all-at-the-end mode, skip the list and the question: go to 6b.
 
-## 6. Apply one at a time
+## 6. Apply
+
+### 6a. One at a time
 
 One suggestion at a time, each with its own yes:
 
@@ -77,6 +88,12 @@ One suggestion at a time, each with its own yes:
 - In JSON files such as `settings.json`, add only the key in question; leave the rest of the file alone.
 - For a new or changed agent follow `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/agent.md`; for memory, `${CLAUDE_PLUGIN_ROOT}/skills/token-lab/references/memory.md`.
 - When an item is done or the user skips it, offer the next one. Stop if the user says stop or no suggestion is left.
+
+### 6b. All at the end
+
+- Apply every finding in the list's order, the judgment ones too. Where a finding leaves a choice (which copy of a shared sentence to keep, fix or delete a stale path), choose yourself and say why in the table.
+- The rules of 6a hold, except the yes per diff: back up each file before its first change, mask `env` in `settings.json`, add before you delete in a move, follow `agent.md` and `memory.md`.
+- At the end, show one table: change, file, why, backup path. Then show every diff (for `settings.json`, only the changed key, masked). Then say how to undo one: copy its backup back over the file.
 
 ## 7. Closing
 
